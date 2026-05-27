@@ -46,7 +46,7 @@ Detaillierte Phasen- und Task-Planung. Tasks werden während der Umsetzung verfe
 14. **Logging:** `pino` einrichten (JSON-Output Prod, `pino-pretty` Dev), Log-Level via `LOG_LEVEL`-Env. Zentraler Logger-Export, der überall benutzt wird statt `console.*`.
 15. **i18n:** `next-intl` Setup mit Locales `de` (Default) und `en` (Fallback-Stub, leere/identische Strings). App-Router-Integration. Alle UI-Strings ab Tag 1 durch `t()`.
 16. **KeyProvider-Interface:** Abstraktes Interface `KeyProvider` (Methode `getEncryptionKey(): Promise<Uint8Array>`) + zwei Implementierungen `EnvKeyProvider`, `FileKeyProvider`. Auswahl per Config (File > ENV). Noch keine KMS-Adapter-Implementierung, nur Interface-Hook für später.
-17. **GitHub-CI (optional in Phase 1):** GitHub Actions Workflow für `pnpm install` + Lint + TypeScript-Check + Vitest auf jeden Push/PR. Darf später folgen.
+17. ~~**GitHub-CI:** Wurde am 2026-05-27 nach kurzer Aktivierung wieder entfernt (User-Entscheidung). Wird ggf. in Phase 5 (Härtung) gemeinsam mit dem Deploy-Audit-Workflow neu aufgesetzt.~~
 
 ### Definition of Done
 - `pnpm dev` startet Next.js lokal mit funktionierender DB-Anbindung

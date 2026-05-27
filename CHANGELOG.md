@@ -45,6 +45,7 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 ### Deprecated
 
 ### Removed
+- `.github/workflows/ci.yml` (GitHub Actions CI). Workflow lief in jedem Push fehl und verursachte Mail-Spam. Reaktivierung später, dann remote-verifiziert.
 
 ### Fixed
 

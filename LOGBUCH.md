@@ -4,6 +4,15 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-05-27 — GitHub Actions CI wieder entfernt
+
+- `.github/workflows/ci.yml` aus Phase 1 wieder gelöscht (User-Entscheidung).
+- Hintergrund: Workflow lief bei jedem Push, schlug fehl (vermutlich an pnpm-11-`allowBuilds`-Syntax oder Workspace-Test-Reihenfolge), generierte Mail-Spam. Vorher nicht remote-verifiziert, weil `gh` CLI lokal nicht installiert ist.
+- Lessons learned: CI nur einbauen, wenn explizit angefordert — Phase-1-Briefing-Antwort A war „CI ergänzt aber blockiert nicht", was ich zu eng ausgelegt hatte.
+- Reaktivierung später (Phase 5 oder gemeinsam mit dem Audit-Workflow), dann mit Repo-Walkthrough vor dem Merge.
+
+---
+
 ## 2026-05-27 — Phase 1 Foundation komplett
 
 ### Implementierung
