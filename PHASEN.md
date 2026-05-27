@@ -12,7 +12,7 @@ Detaillierte Phasen- und Task-Planung. Tasks werden während der Umsetzung verfe
 1. Monorepo-Setup mit pnpm Workspaces (`apps/server`, `packages/sdk-js`, `packages/shared-types`)
 2. Next.js 14 in `apps/server` initialisieren (App Router, TypeScript strict)
 3. ESLint, Prettier, EditorConfig konfigurieren
-4. Prisma initialisieren, leeres `schema.prisma` mit ersten Models (`AdminUser`, `Product` mindestens)
+4. Prisma initialisieren, `schema.prisma` mit ersten Models (`AdminUser`, `Product`, `ApiKey` — Schema reicht, kein UI)
 5. `docker-compose.yml` für lokales Dev: PostgreSQL 16 + App-Container (mit Hot-Reload via Volume-Mount)
 6. `.env.example` vervollständigen, `.env` lokal anlegen
 7. NextAuth mit Credentials Provider einrichten
@@ -22,12 +22,19 @@ Detaillierte Phasen- und Task-Planung. Tasks werden während der Umsetzung verfe
 11. Multi-Stage-Dockerfile für Production-Build
 12. Health-Check-Endpoint (`GET /api/health` → DB-Ping + App-Status)
 13. Basis-Test-Setup mit Vitest, ein Smoke-Test pro Schicht
+14. **Logging:** `pino` einrichten (JSON-Output Prod, `pino-pretty` Dev), Log-Level via `LOG_LEVEL`-Env. Zentraler Logger-Export, der überall benutzt wird statt `console.*`.
+15. **i18n:** `next-intl` Setup mit Locales `de` (Default) und `en` (Fallback-Stub, leere/identische Strings). App-Router-Integration. Alle UI-Strings ab Tag 1 durch `t()`.
+16. **KeyProvider-Interface:** Abstraktes Interface `KeyProvider` (Methode `getEncryptionKey(): Promise<Uint8Array>`) + zwei Implementierungen `EnvKeyProvider`, `FileKeyProvider`. Auswahl per Config (File > ENV). Noch keine KMS-Adapter-Implementierung, nur Interface-Hook für später.
+17. **GitHub-CI (optional in Phase 1):** GitHub Actions Workflow für `pnpm install` + Lint + TypeScript-Check + Vitest auf jeden Push/PR. Darf später folgen.
 
 ### Definition of Done
 - `pnpm dev` startet Next.js lokal mit funktionierender DB-Anbindung
 - `docker-compose up` startet App + DB sauber
 - Admin kann sich mit Passwort + TOTP einloggen und sieht geschütztes Dashboard-Stub
 - Health-Endpoint liefert 200 mit DB-Status
+- Logger schreibt strukturiertes JSON (Prod) bzw. lesbares Format (Dev)
+- `next-intl` ist aktiv, deutsche Strings werden korrekt aufgelöst, EN-Fallback funktioniert
+- KeyProvider-Interface lädt erfolgreich den KEK aus ENV bzw. File
 - Linter, TypeScript-Check und Tests grün
 - LOGBUCH, PROJEKTSTATUS, CHANGELOG aktualisiert
 - Falls in dieser Phase bereits ein Deploy (z.B. auf Staging) ansteht: Audit-Workflow durchgeführt und dokumentiert
@@ -40,10 +47,15 @@ Detaillierte Phasen- und Task-Planung. Tasks werden während der Umsetzung verfe
 
 Wird bei Erreichen von Phase-1-Done auf Task-Ebene heruntergebrochen. Voraussichtlicher Scope:
 - Prisma-Schema komplett (`SigningKey`, `Customer`, `License`, `Activation`, `AuditLog`)
+- `Customer` und `License` mit `externalRef` (indiziert) + `externalSource` (Payment-Anbindung vorbereiten)
+- `License.licenseKey` als UNIQUE-Spalte; Generator-Modul `licenseKey.generate(prefix)` mit Checksum-Char pro Gruppe (Format `TROP-XXXX-XXXX-XXXX-XXXX`)
+- Lizenz-Create-Endpoint idempotent über `(externalRef, externalSource)`-Kombination
 - Admin-CRUD-UIs für Produkte, Kunden, Lizenzen
+- `/api/admin/v1/*` programmatische Endpoints (Session ODER API-Key + Scope geschützt)
 - Lizenz-Status-Management (aktiv / widerrufen / abgelaufen)
 - Feature-Katalog pro Produkt + Feature-Flag-Auswahl pro Lizenz
 - BindingPolicy-Editor (UI für Bindungs-Konfiguration)
+- API-Key-Auth-Middleware vollständig (Hash-Vergleich, Scope-Check, `lastUsedAt`-Update); UI-Verwaltung kann auf später vertagt werden, wenn Sync-Modul noch nicht in Sicht
 
 ---
 
@@ -52,14 +64,15 @@ Wird bei Erreichen von Phase-1-Done auf Task-Ebene heruntergebrochen. Voraussich
 **Status:** geplant
 
 Voraussichtlicher Scope:
-- Ed25519-Key-Generierung + verschlüsselte DB-Speicherung
+- Ed25519-Key-Generierung über `KeyProvider`-Interface (KEK lädt verschlüsselten Private-Key)
 - Key-Rotation-Workflow (alte Keys für Verifikation behalten, neue fürs Signing)
-- JWT-Signing mit `jose`, Claim-Mapping (`iss`, `aud`, `sub`, `exp`, `nbf`, Custom-Claims für Bindings + Features)
+- JWT-Signing mit `jose`, Claim-Mapping (`iss`, `aud`, `sub`, `exp`, `nbf`, `kid`, Custom-Claims für Bindings + Features)
+- `exp` = `Product.jwtLifetimeHours` (Default 168 = 7 Tage), Re-Check-Steuerung über `Product.recheckIntervalHours` (Default 24h)
 - Endpoints: `POST /api/v1/activate`, `POST /api/v1/recheck`, `POST /api/v1/deactivate`
-- `GET /api/v1/.well-known/public-keys` (Public Keys pro Produkt)
-- Revocation-Strategien (default: Re-Check; optional: Refresh-Token)
+- `GET /api/v1/.well-known/public-keys` (Public Keys pro Produkt, mit `kid`)
+- Revocation-Strategien (default: Re-Check; optional: Refresh-Token, pro Produkt schaltbar)
 - Rate-Limiting auf öffentlichen Endpoints
-- Tests: Sign/Verify Roundtrip, Algorithmus-Pinning, Replay-Schutz, Binding-Validierung
+- Tests: Sign/Verify Roundtrip, Algorithmus-Pinning (kein `alg: none`), Replay-Schutz, Binding-Validierung, Key-Rotation-Roundtrip
 
 ---
 
@@ -71,10 +84,11 @@ Voraussichtlicher Scope:
 - Paket `@tropicsoft/license-sdk-js` (Workspaces, eigenes `package.json`)
 - Framework-agnostic Core: `activate()`, `validate()`, `recheck()`, `deactivate()`
 - Storage-Adapter (Browser: IndexedDB; Node: Dateisystem; konfigurierbar)
-- Offline-Validierung gegen mitgelieferte Public Keys (Algorithmus-Pinning)
-- Grace-Period-Verhalten bei Server-Unerreichbarkeit
+- Offline-Validierung gegen mitgelieferte Public Keys (Algorithmus-Pinning, `kid`-Lookup)
+- Grace-Period-Verhalten bei Server-Unerreichbarkeit (Grace = `exp` des Tokens; nach Ablauf harter Failure)
 - Binding-Kontext-Erfassung (Browser → Domain; Node → Installation-ID)
-- Fehler-Klassen: `LicenseExpiredError`, `LicenseRevokedError`, `BindingMismatchError`, `ServerUnreachableError`
+- Fehler-Klassen: `LicenseExpiredError`, `LicenseRevokedError`, `BindingMismatchError`, `ServerUnreachableError` (mit Grace-Period-Info)
+- License-Key-Format-Validierung im SDK (Checksum-Check vor Activate-Call → schneller User-Feedback bei Tippfehler)
 - React-Bindings als optionales Sub-Paket
 - Demo-Integration in einer Mini-App
 

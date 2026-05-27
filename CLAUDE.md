@@ -9,8 +9,28 @@ Dieses Dokument ist das verbindliche Projektbriefing. Es wird im Verlauf verfein
 
 ---
 
+## Repository & Konventionen
+- Repo: https://github.com/1castro/license-engine (privat)
+- GitHub-Workflow Single Source of Truth: `~/Documents/coding-projects/infrastruktur/GITHUB.md`
+- Auth: HTTPS via macOS Keychain, lokale git-Config pro Repo (`Jan Franke <jan@tropicsoft.de>`)
+- Commit-Messages: Deutsch, Titel ≤ 72 Zeichen, Body mit Begründung + Verweisen auf Doku-Files
+- Pre-Push-Sicherheits-Check ist Pflicht (siehe `infrastruktur/GITHUB.md`)
+
 ## Vision
 Zentraler, selbst gehosteter Multi-Product-Lizenz-Server, der signierte Tokens an Clients ausstellt und über SDK + REST-API in beliebige eigene Projekte (Web-Apps, Websites, später iOS/Android) integriert werden kann. Ziel: alle Lizenzierungs-Workflows einer Solo-Developer-Produktlandschaft an einer Stelle bündeln, sauber administrierbar, langfristig erweiterbar.
+
+## Payment/Billing-Abgrenzung
+
+Payment- und Billing-Funktionalität ist **explizit kein Teil dieser License Engine** und wird nicht in diesem Projekt implementiert. Sie wird später als separates, eigenständiges Modul angebunden — voraussichtlich über eine externe Plattform (Stripe oder Paddle) plus dünnes Sync-Modul, das per Webhook Lizenzen erzeugt, verlängert und widerruft.
+
+Folgende Punkte sind beim Design der License Engine zwingend zu berücksichtigen, damit die spätere Anbindung ohne strukturelle Umbauten möglich ist:
+
+- **Lizenz-Lebenszyklus als saubere, von außen ansteuerbare API.** Lizenzen erzeugen, verlängern, widerrufen, Feature-Flags ändern muss programmatisch über die REST-API möglich sein — nicht nur über das Admin-UI. Diese Endpoints werden später vom Sync-Modul aufgerufen.
+- **External-Reference-Felder im Datenmodell vorsehen.** `Customer` und `License` bekommen je ein nullable `externalRef` (String, indiziert) und `externalSource` (z.B. `"stripe"`, `"paddle"`, `"manual"`). Damit lässt sich später eine externe Subscription eindeutig zuordnen, ohne dass das Datenmodell migriert werden muss.
+- **Lizenz-Erstellung idempotent.** Mehrfache Aufrufe mit derselben `externalRef` dürfen nicht zu doppelten Lizenzen führen — Webhooks von Zahlungsanbietern treffen aus Netzgründen mehrfach ein.
+- **Subscription-Ablauf entkoppelt von Zahlung.** Die License Engine prüft nur `expiresAt` und Status der Lizenz. *Warum* eine Lizenz abläuft oder verlängert wurde (Zahlung, Kündigung, Trial-Ende), ist nicht ihre Sache — das entscheidet später das Sync-Modul und ruft die entsprechenden License-Engine-Endpoints auf.
+- **API-Authentifizierung für Service-zu-Service vorsehen.** Neben dem User-Auth fürs Admin-UI braucht es eine Möglichkeit, dass ein externes System (Sync-Modul) sich gegen die Admin-API authentifiziert. API-Keys mit Scopes sind ausreichend, kein vollwertiges OAuth nötig. Im aktuellen Scope nur als Konzept im Datenmodell und Auth-Middleware vorbereiten, nur ausimplementieren wenn für Phase 1 nötig.
+- **Keine Preise, Rechnungen, Steuer-Logik im Datenmodell.** Auch nicht „nur als optionales Feld vorbereitet". Bleibt komplett draußen.
 
 ## Architektur-Entscheidungen (fix)
 
@@ -19,6 +39,18 @@ Zentraler, selbst gehosteter Multi-Product-Lizenz-Server, der signierte Tokens a
 - Hybrid-Validierung: Client aktiviert online → erhält signiertes JWT → validiert danach offline → periodischer Re-Check beim Server.
 - Token-Format: JWT mit Ed25519-Signatur. Public Key wird mit dem SDK verteilt, Private Key bleibt serverseitig. Key-Rotation muss vorgesehen sein.
 - Re-Check-Intervall: Default 24h, konfigurierbar pro Produkt.
+- **JWT-Lifetime + Grace Period:** Default `exp = 7 Tage`, Re-Check alle 24h, Grace = `exp`. Bei Server-Unerreichbarkeit darf der Client bis zum Ablauf von `exp` weiter validieren, danach harter Validation-Failure. `exp` und `recheckIntervalHours` pro Produkt konfigurierbar. Refresh-Token-Modell bleibt optional als `revocationStrategy = refresh` für Produkte mit Bedarf nach schnellerem Widerruf.
+
+### License-Key-Format
+- Endkunden-sichtbarer Lizenzschlüssel: `TROP-XXXX-XXXX-XXXX-XXXX` (4 Gruppen á 4 Zeichen, alphanumerisch, eine Position pro Gruppe als CRC-/Damm-Checksum-Char).
+- Format ist Tipp-fehler-robust und sieht erkennbar nach Lizenzschlüssel aus.
+- Generierung serverseitig bei Lizenz-Erstellung. UUID-Primary-Key bleibt intern, der License-Key ist separat als indiziertes Feld `License.licenseKey` (UNIQUE).
+- Pro Produkt konfigurierbares Prefix möglich, Default-Prefix `TROP-`.
+
+### Master-Encryption-Key (KEK)
+- KEK verschlüsselt die in der DB gespeicherten Ed25519-Private-Keys (`SigningKey.privateKeyEncrypted`).
+- Bereitstellung: ENV-Variable `ENCRYPTION_KEY` (Base64) ODER File-Path `ENCRYPTION_KEY_FILE`. **File hat Vorrang vor ENV**, wenn beides gesetzt ist.
+- Architektur-Vorbereitung: dünnes `KeyProvider`-Interface, das später durch einen KMS-Adapter (HashiCorp Vault, AWS KMS o.ä.) ersetzt werden kann, ohne dass aufrufender Code geändert werden muss. Tag-1-Implementierung: `EnvKeyProvider` + `FileKeyProvider`.
 
 ### Lizenzmodelle (kombinierbar pro Lizenz)
 - Zeitbasiert (Subscription mit `expiresAt`)
@@ -46,6 +78,12 @@ Eine `BindingPolicy` pro Lizenz definiert: welche Bindungstypen sind Pflicht, wi
 - Heute: nur Owner (ich), Passwort + TOTP-2FA.
 - Datenbankschema ab Tag 1 rollen-fähig (Owner / Operator / ReadOnly), im UI aber vorerst nicht exponiert.
 
+### Service-zu-Service-Auth (Admin-API)
+- Für externe Systeme (späteres Payment-Sync-Modul) gibt es einen zweiten Auth-Pfad: API-Keys mit Scopes.
+- Tag-1: Datenmodell (`ApiKey`) + Auth-Middleware-Hook vorbereitet; UI-Verwaltung erst implementieren, wenn ein konkreter Konsument existiert.
+- API-Keys werden im Klartext nur einmal bei der Erstellung angezeigt, in der DB liegen nur Hashes.
+- Scopes folgen dem Schema `<resource>:<action>` (z.B. `licenses:write`, `licenses:revoke`, `customers:write`).
+
 ### Widerruf
 - Pro Produkt konfigurierbar via `revocationStrategy`.
 - Default: greift beim nächsten Re-Check (24h-Granularität).
@@ -62,26 +100,41 @@ Eine `BindingPolicy` pro Lizenz definiert: welche Bindungstypen sind Pflicht, wi
 - NextAuth (Credentials Provider) + TOTP via `otplib`
 - `jose` für JWT-Signing/-Verification (Ed25519)
 - TailwindCSS + shadcn/ui für Admin-UI
+- `next-intl` ab Tag 1, Default-Locale Deutsch, Englisch als technisch eingerichteter Fallback (EN-Strings initial leer / Spiegel von DE)
+- `pino` für strukturiertes JSON-Logging (operatives Server-Log, getrennt vom Audit-Log in der DB), `pino-pretty` für Dev
 - Vitest für Tests (Fokus: sicherheitskritische Pfade)
 - pnpm als Package Manager
 - Monorepo (pnpm Workspaces): `apps/server`, `packages/sdk-js`, `packages/shared-types`
 
 ## Datenmodell (initialer Entwurf, im Verlauf zu verfeinern)
-- `Product`: id, slug, name, featureCatalog (JSON), revocationStrategy, signingKeyId, recheckIntervalHours
+- `Product`: id, slug, name, featureCatalog (JSON), revocationStrategy, signingKeyId, recheckIntervalHours, jwtLifetimeHours (default 168 = 7 Tage), licenseKeyPrefix (default `TROP`)
 - `SigningKey`: id, productId (nullable für globalen Default-Key), publicKey, privateKeyEncrypted, algorithm (`Ed25519`), createdAt, rotatedAt, isActive
-- `Customer`: id, email, name, company (nullable), notes, createdAt
-- `License`: id, customerId, productId, type (`subscription`|`perpetual`), expiresAt (nullable), featureFlags (JSON), bindingPolicy (JSON), status (`active`|`revoked`|`expired`), revokedAt, revocationReason, createdAt
+- `Customer`: id, email, name, company (nullable), notes, externalRef (nullable, indiziert), externalSource (nullable, z.B. `stripe`|`paddle`|`manual`), createdAt
+- `License`: id, customerId, productId, licenseKey (UNIQUE, Format `TROP-XXXX-XXXX-XXXX-XXXX` mit Checksum), type (`subscription`|`perpetual`), expiresAt (nullable), featureFlags (JSON), bindingPolicy (JSON), status (`active`|`revoked`|`expired`), revokedAt, revocationReason, externalRef (nullable, indiziert), externalSource (nullable), createdAt
 - `Activation`: id, licenseId, bindingType, bindingValueHash, bindingValueMetadata (JSON, nicht-sensitiv), activatedAt, lastSeenAt, status
-- `AuditLog`: id, timestamp, eventType, actorType, actorId, targetType, targetId, metadata (JSON), ipHash
+- `AuditLog`: id, timestamp, eventType, actorType (`admin`|`api_key`|`system`|`anonymous`), actorId, targetType, targetId, metadata (JSON), ipHash
 - `AdminUser`: id, email, passwordHash, totpSecret, role (`owner`|`operator`|`readonly`), createdAt, lastLoginAt
+- `ApiKey`: id, name, keyHash, scopes (JSON, z.B. `["licenses:write","licenses:revoke"]`), createdAt, lastUsedAt, revokedAt (nullable) — für Service-zu-Service-Auth (späterer Sync-Modul-Zugriff). Tag-1: Schema + Auth-Middleware vorhanden, UI-Verwaltung erst wenn konkret benötigt.
+
+**Idempotenz-Hinweis:** Lizenz-Erstellungs-Endpoint muss `externalRef` + `externalSource` als Idempotenz-Schlüssel akzeptieren. Mehrfache Aufrufe mit derselben Kombination liefern die existierende Lizenz, statt eine neue zu erzeugen.
 
 ## API-Oberfläche (Skizze)
+
+### Öffentliche Client-API (für SDK / aktivierte Apps)
 - `POST /api/v1/activate` — Lizenzschlüssel + Binding-Kontext → JWT
 - `POST /api/v1/recheck` — bestehendes JWT → erneuertes JWT oder Revocation-Signal
 - `POST /api/v1/deactivate` — Aktivierung freigeben (z.B. Geräte-Wechsel)
 - `GET /api/v1/.well-known/public-keys` — Public Keys pro Produkt für Offline-Verifikation
-- `/admin/*` — Admin-UI-Routen, geschützt durch Auth-Middleware
+
+### Admin-API (für UI und Service-zu-Service)
+- `/admin/*` — Admin-UI-Routen, geschützt durch NextAuth-Session
+- `/api/admin/v1/*` — programmatischer Zugriff (Lizenzen anlegen / verlängern / widerrufen / Feature-Flags ändern, Kunden CRUD), geschützt durch Session ODER API-Key mit passendem Scope
+- Lizenz-Create-Endpoint akzeptiert `externalRef` + `externalSource` als Idempotenz-Schlüssel — Doppel-Calls liefern denselben Datensatz
+
+### Querschnitt
 - Rate-Limiting auf allen öffentlichen Endpoints
+- Algorithmus-Pinning bei JWT-Verifikation (kein `alg: none`, kein Algorithmus-Mismatch)
+- Zod-Validierung für alle eingehenden Payloads
 
 ## SDK (`@tropicsoft/license-sdk-js`)
 - Framework-agnostic Core, keine React-Abhängigkeit

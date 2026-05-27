@@ -1,22 +1,25 @@
 # PROJEKTSTATUS — License Engine
 
-**Aktueller Stand:** Initialisiert. Wartet auf Go für Phase 1.
+**Aktueller Stand:** Initialisiert + Architektur-Entscheidungen eingearbeitet + Payment-Abgrenzung dokumentiert. Wartet auf Go für Phase 1.
 
 **Letztes Update:** 2026-05-27
 
 ---
 
 ## Was läuft
-- Projekt-Setup abgeschlossen: Git-Repo, Doku-Grundgerüst, Phasen-Plan.
-- Verständnisfragen an Jan vorbereitet (siehe Chat).
+- Git-Repo lokal eingerichtet, Remote `https://github.com/1castro/license-engine.git` angebunden (leer auf GitHub).
+- Doku-Grundgerüst komplett: `CLAUDE.md`, `PHASEN.md`, `LOGBUCH.md`, `CHANGELOG.md`, `PROJEKTSTATUS.md`, `README.md`, `.env.example`, `.gitignore`.
+- Sechs Architektur-Entscheidungen aus Verständnisfragen eingearbeitet (License-Key-Format, KEK, JWT-Lifetime, Logging, Git-Remote, i18n).
+- Payment-Nachtrag in `CLAUDE.md` als eigener Abschnitt + im Datenmodell durchgezogen (externalRef-Felder, ApiKey-Entität, idempotente Lizenz-Erstellung).
 
 ## Was hängt
-- Antworten auf die offenen Architektur-Entscheidungen (License-Key-Format, Master-Encryption-Key, JWT-Lifetime, Logging-Stack, Git-Remote, i18n-Tag-1).
+- Nichts hängt — alle Vorarbeiten für Phase 1 abgeschlossen.
 
 ## Nächste Schritte
-1. Antworten von Jan auf Verständnisfragen einarbeiten — `PHASEN.md` und `CLAUDE.md` ggf. präzisieren.
-2. Auf explizites „Go für Phase 1" warten.
-3. Phase 1 starten (siehe `PHASEN.md`).
+1. Zweiter Commit mit Architektur- und Payment-Updates.
+2. Push auf GitHub (`main`).
+3. Auf explizites „Go für Phase 1" warten.
+4. Phase 1 starten (siehe `PHASEN.md`).
 
 ---
 
