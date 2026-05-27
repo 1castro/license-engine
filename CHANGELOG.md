@@ -7,6 +7,12 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Verified — Phase 1 Browser-End-to-End
+- TOTP-Login-Flow (Form → Submit → Redirect zu `/admin`) per Chrome DevTools durchgespielt.
+- TOTP-Replay-Schutz scharf: derselbe Code wird nach erfolgreichem Verbrauch zurückgewiesen.
+- Uniform Error-Message verhindert User-Enumeration / TOTP-vs-Passwort-Leak.
+- Screenshot des Admin-Dashboards unter `docs/screenshots/phase1-admin-dashboard.png`.
+
 ### Added — Phase 1 Foundation
 - Monorepo-Setup mit pnpm-Workspaces (`apps/server`, `packages/sdk-js`, `packages/shared-types`).
 - Next.js 14.2 (App Router) + TypeScript strict + TailwindCSS + ESLint.

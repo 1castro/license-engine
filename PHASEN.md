@@ -16,9 +16,18 @@ Detaillierte Phasen- und Task-Planung. Tasks werden während der Umsetzung verfe
 - `pnpm admin:bootstrap` → Owner-Account erzeugt, otpauth-URL ausgegeben.
 - `pnpm dev` startet, `GET /api/health` → 200 mit DB-OK, `GET /admin` (unauth) → 307 zu `/login?next=…`, `GET /login` → 200.
 
+**Browser-End-to-End-Verifikation (Chrome DevTools):**
+- `/` rendert die deutsche Landing-Page.
+- Klick auf „Admin" → Redirect zu `/login?next=%2Fadmin`.
+- Login mit Email + Passwort + frischem TOTP-Code → Redirect zu `/admin`, Sidebar + Begrüßung „Willkommen, jan@tropicsoft.de." sichtbar.
+- Logout → zurück zu `/login`.
+- Replay-Versuch mit demselben TOTP-Code → abgelehnt, uniform Error „E-Mail, Passwort oder TOTP-Code falsch."
+- Erneuter Login mit frischem Code → erfolgreich.
+- Server-Log-Sequenz dokumentiert: `admin.login.success` → `admin.login.bad_totp` → `admin.login.success`.
+- Screenshot des Dashboards: `docs/screenshots/phase1-admin-dashboard.png`.
+
 **Offen für Phase 2 / nachgelagert:**
 - Multi-Stage-Dockerfile (Target `runtime`) ist geschrieben, aber Image-Build noch nicht End-to-End getestet.
-- Browser-Klick-Verifikation des TOTP-Login-Flows — bisher nur curl-Verifikation der Routes; manueller Login-Test wenn Jan eine Authenticator-App bereit hat.
 
 ### Tasks
 1. Monorepo-Setup mit pnpm Workspaces (`apps/server`, `packages/sdk-js`, `packages/shared-types`)

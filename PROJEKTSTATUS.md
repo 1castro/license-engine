@@ -19,7 +19,6 @@
 
 ## Was hängt
 - Multi-Stage-Dockerfile-`runtime`-Target: noch nicht End-to-End-gebaut/getestet.
-- Manueller Browser-Login-Klick mit Authenticator-App: bisher nur curl-/Route-Verifikation.
 
 ## Nächste Schritte
 1. Commit + Push der Phase-1-Foundation.

@@ -43,12 +43,20 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 - Bootstrap-CLI legt Owner-Account an, gibt TOTP-Secret aus.
 - Dev-Server: `GET /api/health` → 200 mit DB-OK + Latenz, `GET /admin` (unauth) → 307 zu `/login?next=%2Fadmin`, `GET /login` → 200.
 
+### Browser-End-to-End-Verifikation (Chrome DevTools, nachgereicht)
+- `/` → deutsche Landing-Page, Klick „Admin" → Redirect zu `/login?next=%2Fadmin`.
+- Login-Form mit `jan@tropicsoft.de`, Bootstrap-Passwort und frisch generiertem TOTP-Code → erfolgreicher Redirect zu `/admin`, Sidebar + „Willkommen, jan@tropicsoft.de." sichtbar.
+- Logout via Sidebar-Button → NextAuth-Signout-Bestätigung → zurück zu `/login`.
+- **Replay-Schutz verifiziert:** erneuter Login-Versuch mit demselben TOTP-Code → abgelehnt, uniform Error „E-Mail, Passwort oder TOTP-Code falsch.", URL bleibt `/login`.
+- Erneuter Login mit frisch generiertem Code → wieder erfolgreich.
+- Server-Log-Sequenz exakt wie erwartet: `admin.login.success` → `admin.login.bad_totp` → `admin.login.success`.
+- Screenshot des Dashboards unter `docs/screenshots/phase1-admin-dashboard.png` abgelegt.
+
 ### Bewusst noch nicht gemacht
 - Multi-Stage-Dockerfile `runtime`-Target: nicht End-to-End-gebaut/getestet. Compose-Dev mit App-Container ebenfalls noch nicht getestet (nur Postgres allein). Beide kommen bei nächstem Bedarf.
-- Browser-Klick-Login mit echter Authenticator-App: bisher nur Route- und Programmatik-Verifikation. Sobald Jan mit einer Authenticator-App testen will, ist alles bereit.
 
 ### Nächster Schritt
-- Commit + Push der Phase-1-Foundation.
+- Commit + Push der Phase-1-Foundation inklusive Browser-Verifikation und Screenshot.
 - Auf Phase-2-Go warten (Core-Datenmodell vollständig + Admin-CRUD).
 
 ---
