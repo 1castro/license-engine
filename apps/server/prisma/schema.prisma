@@ -1,7 +1,4 @@
 // License Engine — Prisma schema.
-//
-// Tag-1 scope: AdminUser, Product, ApiKey.
-// SigningKey, Customer, License, Activation, AuditLog land in Phase 2.
 
 generator client {
   provider      = "prisma-client-js"
@@ -13,6 +10,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// -----------------------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------------------
+
 enum AdminRole {
   owner
   operator
@@ -23,6 +24,50 @@ enum RevocationStrategy {
   recheck
   refresh
 }
+
+enum SigningAlgorithm {
+  Ed25519
+}
+
+enum ExternalSource {
+  manual
+  stripe
+  paddle
+}
+
+enum LicenseType {
+  subscription
+  perpetual
+}
+
+enum LicenseStatus {
+  active
+  revoked
+  expired
+}
+
+enum BindingType {
+  domain
+  device
+  account
+  installation
+}
+
+enum ActivationStatus {
+  active
+  released
+}
+
+enum AuditActorType {
+  admin
+  api_key
+  system
+  anonymous
+}
+
+// -----------------------------------------------------------------------------
+// Admin
+// -----------------------------------------------------------------------------
 
 model AdminUser {
   id               String    @id @default(cuid())
@@ -39,30 +84,174 @@ model AdminUser {
   @@index([email])
 }
 
-model Product {
-  id                   String             @id @default(cuid())
-  slug                 String             @unique
-  name                 String
-  featureCatalog       Json               @default("[]")
-  revocationStrategy   RevocationStrategy @default(recheck)
-  recheckIntervalHours Int                @default(24)
-  jwtLifetimeHours     Int                @default(168)
-  licenseKeyPrefix     String             @default("TROP")
-  // signingKeyId comes in Phase 2 together with SigningKey model.
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-
-  @@index([slug])
-}
-
 model ApiKey {
   id         String    @id @default(cuid())
   name       String
+  /// Argon2id hash of the plaintext key. Plaintext is shown once on creation
+  /// and never stored anywhere on the server.
   keyHash    String    @unique
+  /// Scopes as JSON string array, e.g. ["licenses:write", "licenses:revoke"].
   scopes     Json      @default("[]")
   createdAt  DateTime  @default(now())
   lastUsedAt DateTime?
   revokedAt  DateTime?
 
   @@index([revokedAt])
+}
+
+// -----------------------------------------------------------------------------
+// Domain: Products, Signing Keys
+// -----------------------------------------------------------------------------
+
+model Product {
+  id                   String             @id @default(cuid())
+  slug                 String             @unique
+  name                 String
+  /// Catalog of features this product offers, as JSON array of feature IDs/names.
+  featureCatalog       Json               @default("[]")
+  revocationStrategy   RevocationStrategy @default(recheck)
+  recheckIntervalHours Int                @default(24)
+  jwtLifetimeHours     Int                @default(168)
+  /// Prefix for license keys of this product. Default "TROP", configurable per product
+  /// or per partner branding.
+  licenseKeyPrefix     String             @default("TROP")
+  /// Currently active signing key for this product. Old keys remain for verification
+  /// during rotation grace periods.
+  activeSigningKeyId   String?            @unique
+  activeSigningKey     SigningKey?        @relation("ActiveSigningKey", fields: [activeSigningKeyId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  signingKeys SigningKey[] @relation("ProductSigningKeys")
+  licenses    License[]
+
+  @@index([slug])
+}
+
+model SigningKey {
+  id        String           @id @default(cuid())
+  /// Owning product; nullable for a global default key (Phase 3+ optional).
+  productId String?
+  product   Product?         @relation("ProductSigningKeys", fields: [productId], references: [id], onDelete: Cascade)
+  algorithm SigningAlgorithm @default(Ed25519)
+  /// Public key as raw base64, distributed via /.well-known/public-keys.
+  publicKey String
+  /// Private key encrypted with the KEK from KeyProvider. Format: nonce + ciphertext + tag, all base64.
+  privateKeyEncrypted String
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  rotatedAt           DateTime?
+
+  activeForProduct Product? @relation("ActiveSigningKey")
+
+  @@index([productId, isActive])
+}
+
+// -----------------------------------------------------------------------------
+// Domain: Customers, Licenses, Activations
+// -----------------------------------------------------------------------------
+
+model Customer {
+  id      String  @id @default(cuid())
+  email   String
+  name    String
+  company String?
+  notes   String?
+  /// Reference into an external system (e.g. Stripe customer id) for sync.
+  externalRef    String?
+  externalSource ExternalSource @default(manual)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  licenses  License[]
+
+  @@unique([externalSource, externalRef], name: "externalRef_unique")
+  @@index([email])
+  @@index([externalRef])
+}
+
+model License {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  /// End-user-visible license key, format e.g. TROP-A1B2-C3D4-E5F6-G7H8.
+  licenseKey String      @unique
+  type       LicenseType @default(subscription)
+  /// null = perpetual or no upper bound; otherwise the license expires at this point.
+  expiresAt  DateTime?
+
+  /// Active feature flags as JSON array, must be a subset of Product.featureCatalog.
+  featureFlags Json @default("[]")
+  /// Binding policy as JSON object describing required binding types, max activations
+  /// per type, and AND/OR composition rules.
+  bindingPolicy Json @default("{}")
+
+  status           LicenseStatus @default(active)
+  revokedAt        DateTime?
+  revocationReason String?
+
+  /// Reference into an external system (e.g. Stripe subscription id) for sync.
+  externalRef    String?
+  externalSource ExternalSource @default(manual)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  activations Activation[]
+
+  @@unique([externalSource, externalRef], name: "externalRef_unique")
+  @@index([customerId])
+  @@index([productId])
+  @@index([status])
+  @@index([externalRef])
+}
+
+model Activation {
+  id          String      @id @default(cuid())
+  licenseId   String
+  license     License     @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  bindingType BindingType
+  /// SHA-256 hash of the binding value (domain, device fingerprint, etc.). Never stored in plaintext.
+  bindingValueHash String
+  /// Non-sensitive metadata about the binding, e.g. browser name or OS, as JSON.
+  bindingValueMetadata Json @default("{}")
+
+  activatedAt DateTime         @default(now())
+  lastSeenAt  DateTime         @default(now())
+  status      ActivationStatus @default(active)
+  releasedAt  DateTime?
+
+  @@unique([licenseId, bindingType, bindingValueHash], name: "binding_unique")
+  @@index([licenseId])
+  @@index([bindingValueHash])
+}
+
+// -----------------------------------------------------------------------------
+// Audit
+// -----------------------------------------------------------------------------
+
+model AuditLog {
+  id        String         @id @default(cuid())
+  timestamp DateTime       @default(now())
+  /// Event identifier, e.g. "license.created", "license.revoked", "admin.login.success".
+  eventType String
+  actorType AuditActorType
+  /// AdminUser.id or ApiKey.id depending on actorType; null for system/anonymous events.
+  actorId   String?
+  /// Target entity type (e.g. "License", "Product"); null for events without a target.
+  targetType String?
+  targetId   String?
+  /// Free-form metadata about the event. Must not contain plaintext secrets.
+  metadata   Json @default("{}")
+  /// SHA-256 hash of the source IP. Never store IPs in cleartext (DSGVO).
+  ipHash     String?
+
+  @@index([timestamp])
+  @@index([eventType])
+  @@index([targetType, targetId])
+  @@index([actorType, actorId])
 }

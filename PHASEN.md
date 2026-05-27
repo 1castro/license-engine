@@ -64,9 +64,31 @@ Detaillierte Phasen- und Task-Planung. Tasks werden während der Umsetzung verfe
 
 ## Phase 2 — Core-Datenmodell + Admin-CRUD
 
-**Status:** geplant
+**Status:** done (2026-05-27).
 
-Wird bei Erreichen von Phase-1-Done auf Task-Ebene heruntergebrochen. Voraussichtlicher Scope:
+**Verifikation:**
+- `pnpm typecheck`, `pnpm lint` grün; `pnpm test` 68 Tests grün (License-Key 21, API-Key 14, AuditLog 10, API-Key-Middleware 7, KeyProvider 7, TOTP 4, Password 3, RateLimit 2).
+- `pnpm build` grün (alle Routes inkl. neuer Admin-CRUD-Pages und Admin-API-Routen kompiliert).
+- Browser-End-to-End mit Chrome DevTools durchgespielt:
+  - Produkt `avatar-pro` (Prefix `TROP` → kanonisiert zu `TR0P`) angelegt, in Liste sichtbar.
+  - Kunde `Maria Tester` angelegt, in Liste sichtbar.
+  - Lizenz mit Generator-Output `TR0P-VMY6-HKMY-BRXP-19X4` ausgestellt, Feature-Flags `voice`+`lipsync` aus Avatar-Pro-Katalog, BindingPolicy als JSON validiert.
+  - Lizenz via Revoke-Dialog mit Begründung „Phase-2-Verifikationstest" widerrufen, Status in Liste wechselt auf „Widerrufen".
+  - API-Key `stripe-sync-modul (test)` mit Scopes `customers:write`, `licenses:write`, `licenses:revoke` angelegt, Plaintext `lek_…` einmalig angezeigt mit Copy-Button, danach Liste zeigt nur Hash-Metadaten.
+- API-Verifikation via curl:
+  - `GET /api/admin/v1/customers` ohne Auth → 401.
+  - mit `lek_…` aber ohne passenden Scope → 403 mit klarer Message.
+  - mit ungültigem Key-Format → 401.
+  - `POST /api/admin/v1/customers` mit `lek_…` + `customers:write` → 201.
+  - `POST /api/admin/v1/licenses` zweimal mit gleicher `(externalRef, externalSource)`-Kombi → erst 201 (neu erzeugt), dann 200 (idempotent: dieselbe License-ID + derselbe Key zurück).
+- `apiKey.lastUsedAt` nach den curl-Calls korrekt aktualisiert.
+- AuditLog enthält 7 Einträge (`product.created`, `customer.created` × 2, `license.created` × 2, `license.revoked`, `apikey.created`), `actorType` korrekt zwischen `admin` und `api_key` getrennt, IPs nur als Hash gespeichert, der idempotente zweite License-Create-Call erzeugte zu Recht keinen neuen Audit-Eintrag.
+
+**Offen / abweichend vom Briefing:**
+- `Customer`-Create ist NICHT idempotent über `(externalRef, externalSource)` — gibt bei Duplikat 409. Briefing forderte Idempotenz nur explizit für `License`. Falls das Sync-Modul später auch für Customer Idempotenz braucht, ist es 1:1 wie bei License umstellbar.
+- Multi-Stage-Dockerfile-`runtime`-Target nach wie vor nicht End-to-End-gebaut.
+
+**Voraussichtlicher Scope (war Phase-2-Plan):**
 - Prisma-Schema komplett (`SigningKey`, `Customer`, `License`, `Activation`, `AuditLog`)
 - `Customer` und `License` mit `externalRef` (indiziert) + `externalSource` (Payment-Anbindung vorbereiten)
 - `License.licenseKey` als UNIQUE-Spalte; Generator-Modul `licenseKey.generate(prefix)` mit Checksum-Char pro Gruppe (Format `TROP-XXXX-XXXX-XXXX-XXXX`)

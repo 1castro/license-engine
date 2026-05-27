@@ -7,6 +7,24 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Added — Phase 2 Core-Datenmodell + Admin-CRUD
+- Prisma-Schema erweitert um `SigningKey`, `Customer`, `License`, `Activation`, `AuditLog` mit allen Enums (`SigningAlgorithm`, `ExternalSource`, `LicenseType`, `LicenseStatus`, `BindingType`, `ActivationStatus`, `AuditActorType`). `Customer` und `License` mit `externalRef` + `externalSource` für Payment-Sync-Modul. Migration `20260527100000_phase2_full_domain_model`.
+- License-Key-Generator + Validator mit Crockford-Base32-Alphabet, pro 4-Zeichen-Gruppe ein Checksum-Char unter Einbezug von Prefix und Group-Index. 21 Tests grün.
+- AuditLog-Writer mit HMAC-SHA256-IP-Hash (Salt aus NEXTAUTH_SECRET, keine neue ENV), Metadata-Scrubbing für sensitive Keys, fire-and-forget DB-Writes. 10 Tests grün.
+- API-Key-Layer (`lek_<32-base64url>`, SHA-256-Hash für O(1)-Lookup, Scope-System, `lastUsedAt`-Tracking). 21 Tests grün (Key + Middleware).
+- Zentraler `authorizeAdminRoute`-Wrapper: Session ODER API-Key, optionale Scope-Anforderung, einheitliche 401/403-Responses.
+- Service-Layer für Products/Customers/Licenses/ApiKeys mit Zod-Schemas, typed Errors (`ProductInUseError`, `CustomerHasLicensesError`, `ProductNotFoundError`, `LicenseAlreadyRevokedError`, `LicenseNotFoundError`), AuditLog-Integration in jeder mutating Operation.
+- Admin-API unter `/api/admin/v1/{products,customers,licenses,api-keys}` mit CRUD-Routes, License-Create idempotent über `(externalRef, externalSource)`, License-Revoke separater POST-Endpoint.
+- Admin-CRUD-UIs unter `/admin/{products,customers,licenses,api-keys}` (shadcn-Komponenten + react-hook-form + Radix-Primitives), Forms POSTen an die Admin-API-Routes, lesbare Error-Mappings für 409-Konflikte, API-Key-Plaintext-Once-Show mit Copy-Button.
+- 13 shadcn/ui-Komponenten manuell aufgesetzt (CLI-Probleme mit shadcn 4.x umgangen): `button`, `input`, `label`, `textarea`, `card`, `dialog`, `select`, `checkbox`, `badge`, `alert`, `table`, `form`, `dropdown-menu`.
+- i18n-Sections `products`, `customers`, `licenses`, `apiKeys`, `errors` in `messages/de.json` und `messages/en.json`.
+
+### Verified — Phase 2 Browser- + API-End-to-End
+- Komplette CRUD-Klicks durch Chrome DevTools: Produkt → Kunde → Lizenz (mit dynamischen Feature-Flags + BindingPolicy) → Revoke. Lizenz-Key `TR0P-VMY6-HKMY-BRXP-19X4` (`TROP` → `TR0P` via Crockford-Normalisierung).
+- API-Key `lek_…` per UI angelegt, Plaintext einmalig sichtbar mit Copy-Button + Warnung.
+- API per curl gegen den Key getestet: 401 ohne Auth, 401 bei malformed Key, 403 bei fehlendem Scope, 201 bei Customer-Create, 200 (idempotent) bei zweitem License-Create mit gleicher externalRef. `apiKey.lastUsedAt` aktualisiert.
+- 7 AuditLog-Einträge sauber in Postgres, `actorType` zwischen `admin` und `api_key` korrekt unterschieden, IPs nur als Hash, idempotenter Re-Call ohne zusätzlichen Audit-Eintrag.
+
 ### Verified — Phase 1 Browser-End-to-End
 - TOTP-Login-Flow (Form → Submit → Redirect zu `/admin`) per Chrome DevTools durchgespielt.
 - TOTP-Replay-Schutz scharf: derselbe Code wird nach erfolgreichem Verbrauch zurückgewiesen.

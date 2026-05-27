@@ -34,10 +34,10 @@ export default async function AdminLayout({
         </div>
         <nav className="flex-1 space-y-1 px-3">
           <NavItem href="/admin" label={t('dashboard')} />
-          <NavItem href="/admin/products" label={t('products')} disabled />
-          <NavItem href="/admin/customers" label={t('customers')} disabled />
-          <NavItem href="/admin/licenses" label={t('licenses')} disabled />
-          <NavItem href="/admin/api-keys" label={t('apiKeys')} disabled />
+          <NavItem href="/admin/products" label={t('products')} />
+          <NavItem href="/admin/customers" label={t('customers')} />
+          <NavItem href="/admin/licenses" label={t('licenses')} />
+          <NavItem href="/admin/api-keys" label={t('apiKeys')} />
           <NavItem href="/admin/audit-log" label={t('auditLog')} disabled />
           <NavItem href="/admin/settings" label={t('settings')} disabled />
         </nav>

@@ -4,6 +4,59 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-05-27 — Phase 2 komplett
+
+### Bündel A — Foundation
+- Prisma-Schema um `SigningKey`, `Customer`, `License`, `Activation`, `AuditLog` erweitert. Migration `20260527100000_phase2_full_domain_model` via `prisma migrate diff` + `migrate deploy` (Prisma CLI verweigerte non-interactive auf einen `--unique`-Warning).
+- License-Key-Generator `src/lib/license/license-key.ts`: Crockford-Base32-Alphabet ohne I/L/O/U, transparente Normalisierung (O→0, I/L→1, U→V) für Input, pro 4-er-Gruppe ein Check-Char unter Einbezug von Prefix + Group-Index. 21 Tests grün.
+- Designentscheidung mit Jan bestätigt: Crockford bleibt, Prefix `TROP` wird kanonisch zu `TR0P` (Option A aus drei vorgelegten).
+- AuditLog-Writer `src/lib/audit/` mit `writeAuditLog`, `hashIp` (HMAC-SHA256 aus `NEXTAUTH_SECRET` als Salt, keine neue ENV nötig), `extractIp` (X-Forwarded-For → X-Real-IP-Fallback), `scrubMetadata` (Defense-in-Depth gegen versehentlich geleakte Secrets in Metadata-Feldern). 10 Tests grün.
+
+### Bündel B — API-Key-Layer
+- `src/lib/auth/api-key.ts`: Format `lek_<32-base64url>`, SHA-256-Hash für DB-Lookup (nicht argon2, weil 192 Bit Entropie Brute-Force ausschließen — argon2 wäre Overkill und teuer pro Request).
+- `src/lib/auth/api-key-middleware.ts`: `extractApiKeyPlaintext` (Bearer + X-API-Key), `authenticateApiKey` (Hash-Lookup + revoke-Check + `lastUsedAt`-Fire-and-Forget), `hasScope`.
+- `src/lib/auth/admin-route-auth.ts`: zentraler `authorizeAdminRoute(req, { requireScope? })`-Wrapper für alle `/api/admin/v1/*`-Routes — Session zuerst, dann API-Key, sonst 401/403 als NextResponse.
+- 21 Tests (API-Key + Middleware) grün.
+
+### Bündel C — Services + Admin-API
+- `src/lib/services/product-service.ts` als Vorlage selbst gebaut (Zod-Schemas, CRUD-Funktionen, AuditLog-Integration, `ProductInUseError` bei Delete mit referenzierten Lizenzen).
+- `/api/admin/v1/products/route.ts` und `[id]/route.ts` als Route-Vorlage. Auth via `authorizeAdminRoute` mit `requireScope: 'products:read'`/`'products:write'`. Prisma-Error-Mapping (P2002 → 409, P2025 → 404).
+- Sub-Agent gebaut: `customer-service.ts`, `license-service.ts` (mit Idempotenz, License-Key-Retry bei UNIQUE-Kollision, `revokeLicense`, typed Errors), `api-key-service.ts`. Plus die zugehörigen Routen unter `/api/admin/v1/customers`, `/api/admin/v1/licenses` (inkl. `[id]/revoke`), `/api/admin/v1/api-keys`. typecheck + lint grün.
+
+### Bündel D — Admin-CRUD-UIs
+- shadcn-Foundation manuell aufgesetzt: Radix-Primitives, `class-variance-authority`, `clsx`, `tailwind-merge`, `lucide-react@0.469`, `react-hook-form@7`, `@hookform/resolvers@3`, `tailwindcss-animate` — alles mit pinned Versions. `components.json`, `src/lib/utils.ts` (cn), `tailwind.config.ts` und `globals.css` mit CSS-Variablen.
+- shadcn CLI 4.x verworfen (zieht `@base-ui/react` Beta + falsche lucide-Version 1.16), 2.4 erfordert Tailwind v4. Manuelles Setup als Workaround.
+- Sub-Agent gebaut: 13 shadcn-UI-Komponenten (`button`, `input`, `label`, `textarea`, `card`, `dialog`, `select`, `checkbox`, `badge`, `alert`, `table`, `form`, `dropdown-menu`), 14 Admin-Pages und Dialog-Komponenten, i18n-Sections `products`/`customers`/`licenses`/`apiKeys`/`errors`. Sidebar im Admin-Layout aktiviert für die vier neuen Bereiche. typecheck, lint, build grün.
+
+### Bündel E — Verifikation
+- `pnpm typecheck`, `pnpm lint`, `pnpm test` (68 grün), `pnpm build` (alle Routes kompilieren).
+- Chrome-DevTools-End-to-End:
+  - Login mit TOTP (mit Replay-Schutz, schon aus Phase 1).
+  - Produkt `avatar-pro` angelegt → Prefix wurde sichtbar zu `TR0P` normalisiert.
+  - Kunde `Maria Tester` angelegt.
+  - Lizenz erzeugt → Generator-Output `TR0P-VMY6-HKMY-BRXP-19X4`. Feature-Flags-Auswahl wird dynamisch aus dem gewählten Produkt geladen, BindingPolicy als JSON-Textarea akzeptiert.
+  - Lizenz via Revoke-Dialog widerrufen, Status in Liste auf „Widerrufen".
+  - API-Key `stripe-sync-modul (test)` mit Scopes `customers:write`, `licenses:write`, `licenses:revoke` angelegt, Plaintext `lek_<redacted>` einmalig im Dialog mit Copy-Button + Warnung.
+- API-Verifikation per curl:
+  - `GET /customers` ohne Auth → 401, mit Key aber ohne `customers:read` → 403 mit klarer Message, mit malformed Key → 401.
+  - `POST /customers` mit Key + Scope → 201 (Erfolg).
+  - **License-Idempotenz scharf:** zwei Calls mit `(externalRef=sub_abc123, externalSource=stripe)` → erst 201 Created, dann 200 OK mit identischer License-ID + identischem Key.
+- `apiKey.lastUsedAt` nach den curl-Calls aktualisiert (UI-Liste nach Reload).
+- AuditLog (Postgres direkt gequeryt): 7 Einträge sauber, korrektes `actorType`-Switching admin↔api_key, alle IPs gehasht (kein Klartext), idempotenter Re-Call hat KEINEN neuen Audit-Eintrag erzeugt.
+
+### Abweichung vom Briefing
+- `Customer`-Create ist nicht idempotent (gibt 409 statt 200+existing). Briefing forderte Idempotenz explizit nur für License. Falls Sync-Modul es später braucht, 1:1 nach License-Pattern erweiterbar.
+
+### Was nicht gemacht wurde (bewusst)
+- Multi-Stage-Dockerfile `runtime`-Target weiterhin nicht End-to-End-gebaut.
+- Keine Integration-Tests gegen die Live-DB für die Service-Layer. Aktuell sind alle Unit-Tests stub-frei und nutzen real-crypto / real-zod, aber Service-Methoden mit Prisma-Calls sind nur über das End-to-End-curl- und Browser-Setup verifiziert. Echte Integration-Tests gegen eine Test-DB wären ein eigener Vitest-Setup-Block.
+
+### Nächster Schritt
+- Phase-2-Bundle committen + pushen.
+- Auf Phase-3-Go warten (Ed25519-Key-Management, JWT-Signing, Activate/Recheck/Deactivate-Endpoints, Public-Keys-Discovery, Rate-Limiting).
+
+---
+
 ## 2026-05-27 — GitHub Actions CI wieder entfernt
 
 - `.github/workflows/ci.yml` aus Phase 1 wieder gelöscht (User-Entscheidung).

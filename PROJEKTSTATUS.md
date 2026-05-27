@@ -1,29 +1,29 @@
 # PROJEKTSTATUS — License Engine
 
-**Aktueller Stand:** Phase 1 (Foundation) done. Wartet auf Go für Phase 2.
+**Aktueller Stand:** Phase 2 (Datenmodell + Admin-CRUD) done. Wartet auf Go für Phase 3.
 
 **Letztes Update:** 2026-05-27
 
 ---
 
 ## Was läuft
-- Monorepo (pnpm-Workspaces) mit `apps/server`, `packages/sdk-js`, `packages/shared-types`.
-- Next.js 14.2 + TypeScript strict + Tailwind 3 + ESLint + next-intl (de/en) + pino.
-- Prisma 5 + Postgres 16 (Schema: AdminUser/Product/ApiKey), Initial-Migration läuft.
-- NextAuth-Credentials + TOTP (argon2id + otplib, Replay-Schutz + In-Memory-Rate-Limit), geschützte `/admin`-Routes (Middleware + Server-Session als Defense-in-Depth).
-- Bootstrap-CLI (`pnpm admin:bootstrap`) für den initialen Owner-Account.
-- Health-Endpoint mit DB-Ping, KeyProvider (File > ENV) mit 32-Byte-Validation und Permission-Check.
-- Docker-Compose (Postgres + App-Container mit Hot-Reload), Multi-Stage-Dockerfile mit `runtime`-Target.
-- Vitest mit 16 Tests grün (KeyProvider, Password, TOTP, Rate-Limit).
-- GitHub Actions CI (`.github/workflows/ci.yml`): install + prisma generate + lint + typecheck + test.
+- Monorepo + Next.js 14.2 + TypeScript strict + Tailwind 3 + ESLint + next-intl (de/en) + pino (aus Phase 1).
+- Prisma 5 + Postgres 16 mit vollständigem Schema: `AdminUser`, `ApiKey`, `Product`, `SigningKey`, `Customer`, `License`, `Activation`, `AuditLog`.
+- NextAuth Credentials + TOTP mit Replay-Schutz, Bootstrap-CLI (aus Phase 1).
+- Admin-API-Key-Layer (`lek_<32-base64url>`, SHA-256-Hash, Scopes, `lastUsedAt`-Tracking, Plaintext-Once-Show im Create-Dialog).
+- License-Key-Generator: Crockford-Base32, 4 Gruppen × 4 Zeichen mit Checksum, transparente O/I/L/U-Normalisierung.
+- AuditLog-Writer mit IP-Hash via HMAC-SHA256 (stable Pseudonymisierung), Metadata-Scrubbing, fire-and-forget bei DB-Fehlern.
+- Admin-CRUD-UIs für Produkte, Kunden, Lizenzen, API-Keys (shadcn/ui + react-hook-form + Radix-Primitives). Forms POSTen an die Admin-API-Routes.
+- Admin-API unter `/api/admin/v1/*`: Products/Customers/Licenses/ApiKeys, Auth via Session ODER API-Key mit Scope-Check, License-Create idempotent über `(externalRef, externalSource)`.
+- Vitest mit 68 Tests grün (KeyProvider 7, Password 3, TOTP 4, Rate-Limit 2, License-Key 21, AuditLog 10, API-Key 14, API-Key-Middleware 7).
 
 ## Was hängt
 - Multi-Stage-Dockerfile-`runtime`-Target: noch nicht End-to-End-gebaut/getestet.
+- `Customer`-Create ist nicht idempotent (gibt 409 statt 200+existing). Briefing forderte das explizit nur für License. Bei Bedarf nachziehbar.
 
 ## Nächste Schritte
-1. Commit + Push der Phase-1-Foundation.
-2. Auf explizites „Go für Phase 2" warten.
-3. Phase 2 starten: Datenmodell komplett (SigningKey, Customer, License, Activation, AuditLog), Admin-CRUD-UIs, programmatische Admin-API, License-Key-Generator mit Checksum, ApiKey-Auth-Middleware.
+1. Auf explizites „Go für Phase 3" warten.
+2. Phase 3 starten: Ed25519-Key-Management (über `KeyProvider`-Interface), JWT-Signing mit `jose`, Endpoints `/api/v1/activate`, `/api/v1/recheck`, `/api/v1/deactivate`, `/api/v1/.well-known/public-keys`. Key-Rotation-Workflow. Rate-Limiting auf öffentlichen Endpoints. Tests für Sign/Verify-Roundtrip, Algorithmus-Pinning, Replay-Schutz, Binding-Validierung.
 
 ---
 
