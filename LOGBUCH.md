@@ -4,6 +4,20 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-05-27 — Customer-Create idempotent nachgezogen
+
+- `createCustomer` in `customer-service.ts` analog zu `createLicense` umgebaut: bei `externalRef` + `externalSource !== 'manual'` → erst `findUnique` über die unique-Constraint, bei Treffer return `{ customer: existing, created: false }`, sonst neu anlegen mit `{ customer: new, created: true }`.
+- `customers/route.ts` POST liefert Status `201` (created) oder `200` (idempotent) basierend auf dem `created`-Flag. Der P2002-Catch bleibt als Defense-in-Depth gegen Race-Conditions (zwei parallele POSTs, die beide den `findUnique` passieren).
+- Customer-Form (`res.ok`-Check) deckt bereits 200 und 201 ab — keine UI-Anpassung nötig.
+- Verifikation per curl:
+  - existing `cus_test_123` (aus Phase-2-Verifikation) → `200` mit existing Customer.
+  - neuer `cus_new_456` → `201`.
+  - Re-Call gleicher `cus_new_456` → `200` mit identischer Customer-ID.
+- AuditLog: 3 `customer.created`-Einträge (1× admin aus Browser, 2× api_key aus curl), Re-Call hat KEINEN zusätzlichen Eintrag erzeugt — identisches Verhalten zu License.
+- 68 Tests bleiben grün, typecheck + lint grün.
+
+---
+
 ## 2026-05-27 — Phase 2 komplett
 
 ### Bündel A — Foundation

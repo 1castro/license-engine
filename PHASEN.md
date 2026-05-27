@@ -85,8 +85,10 @@ Detaillierte Phasen- und Task-Planung. Tasks werden während der Umsetzung verfe
 - AuditLog enthält 7 Einträge (`product.created`, `customer.created` × 2, `license.created` × 2, `license.revoked`, `apikey.created`), `actorType` korrekt zwischen `admin` und `api_key` getrennt, IPs nur als Hash gespeichert, der idempotente zweite License-Create-Call erzeugte zu Recht keinen neuen Audit-Eintrag.
 
 **Offen / abweichend vom Briefing:**
-- `Customer`-Create ist NICHT idempotent über `(externalRef, externalSource)` — gibt bei Duplikat 409. Briefing forderte Idempotenz nur explizit für `License`. Falls das Sync-Modul später auch für Customer Idempotenz braucht, ist es 1:1 wie bei License umstellbar.
 - Multi-Stage-Dockerfile-`runtime`-Target nach wie vor nicht End-to-End-gebaut.
+
+**Nachgezogen:**
+- `Customer`-Create ist seit dem Phase-2-Nachzug ebenfalls idempotent über `(externalRef, externalSource)` (gibt 200+existing statt 409). 1:1 dasselbe Pattern wie `createLicense`. Per curl verifiziert (201 → 200 mit identischer ID, kein Doppel-Audit).
 
 **Voraussichtlicher Scope (war Phase-2-Plan):**
 - Prisma-Schema komplett (`SigningKey`, `Customer`, `License`, `Activation`, `AuditLog`)

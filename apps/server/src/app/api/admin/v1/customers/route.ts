@@ -34,15 +34,13 @@ export async function POST(req: Request) {
   }
 
   try {
-    const customer = await createCustomer(parsed.data, auth);
-    return NextResponse.json({ customer }, { status: 201 });
+    const { customer, created } = await createCustomer(parsed.data, auth);
+    return NextResponse.json({ customer }, { status: created ? 201 : 200 });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      return jsonError(
-        409,
-        'conflict',
-        'A customer with this external reference already exists for the given source',
-      );
+      // Should now only happen on email-uniqueness or other UNIQUE constraints,
+      // not on (externalSource, externalRef) — the service handles that idempotently.
+      return jsonError(409, 'conflict', 'A customer with this identifier already exists');
     }
     throw err;
   }

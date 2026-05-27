@@ -38,7 +38,25 @@ export function getCustomer(id: string): Promise<Customer | null> {
 export async function createCustomer(
   input: CustomerCreateInput,
   ctx: AdminAuthContext,
-): Promise<Customer> {
+): Promise<{ customer: Customer; created: boolean }> {
+  // Idempotency: when called with a non-manual externalRef/source pair, an
+  // existing record short-circuits creation. Webhooks (Stripe, Paddle, …)
+  // may retry repeatedly; the second call must return the same customer
+  // instead of failing with a UNIQUE violation. Mirrors createLicense.
+  if (input.externalRef && input.externalSource !== 'manual') {
+    const existing = await prisma.customer.findUnique({
+      where: {
+        externalRef_unique: {
+          externalSource: input.externalSource,
+          externalRef: input.externalRef,
+        },
+      },
+    });
+    if (existing) {
+      return { customer: existing, created: false };
+    }
+  }
+
   const customer = await prisma.customer.create({
     data: {
       email: input.email,
@@ -57,7 +75,7 @@ export async function createCustomer(
     metadata: { email: customer.email, name: customer.name },
     ip: ctx.ip,
   });
-  return customer;
+  return { customer, created: true };
 }
 
 export async function updateCustomer(

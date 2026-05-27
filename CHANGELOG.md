@@ -7,6 +7,9 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Changed
+- `createCustomer` ist jetzt idempotent über `(externalRef, externalSource)` — analog zur License-Erstellung. Mehrfache POSTs mit gleicher externer Referenz liefern die existierende Customer-ID mit 200 statt 409. Schließt die Phase-2-Abweichung vom Briefing.
+
 ### Added — Phase 2 Core-Datenmodell + Admin-CRUD
 - Prisma-Schema erweitert um `SigningKey`, `Customer`, `License`, `Activation`, `AuditLog` mit allen Enums (`SigningAlgorithm`, `ExternalSource`, `LicenseType`, `LicenseStatus`, `BindingType`, `ActivationStatus`, `AuditActorType`). `Customer` und `License` mit `externalRef` + `externalSource` für Payment-Sync-Modul. Migration `20260527100000_phase2_full_domain_model`.
 - License-Key-Generator + Validator mit Crockford-Base32-Alphabet, pro 4-Zeichen-Gruppe ein Checksum-Char unter Einbezug von Prefix und Group-Index. 21 Tests grün.
