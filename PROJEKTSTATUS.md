@@ -1,25 +1,30 @@
 # PROJEKTSTATUS — License Engine
 
-**Aktueller Stand:** Initialisiert + Architektur-Entscheidungen eingearbeitet + Payment-Abgrenzung dokumentiert. Wartet auf Go für Phase 1.
+**Aktueller Stand:** Phase 1 (Foundation) done. Wartet auf Go für Phase 2.
 
 **Letztes Update:** 2026-05-27
 
 ---
 
 ## Was läuft
-- Git-Repo lokal eingerichtet, Remote `https://github.com/1castro/license-engine.git` angebunden (leer auf GitHub).
-- Doku-Grundgerüst komplett: `CLAUDE.md`, `PHASEN.md`, `LOGBUCH.md`, `CHANGELOG.md`, `PROJEKTSTATUS.md`, `README.md`, `.env.example`, `.gitignore`.
-- Sechs Architektur-Entscheidungen aus Verständnisfragen eingearbeitet (License-Key-Format, KEK, JWT-Lifetime, Logging, Git-Remote, i18n).
-- Payment-Nachtrag in `CLAUDE.md` als eigener Abschnitt + im Datenmodell durchgezogen (externalRef-Felder, ApiKey-Entität, idempotente Lizenz-Erstellung).
+- Monorepo (pnpm-Workspaces) mit `apps/server`, `packages/sdk-js`, `packages/shared-types`.
+- Next.js 14.2 + TypeScript strict + Tailwind 3 + ESLint + next-intl (de/en) + pino.
+- Prisma 5 + Postgres 16 (Schema: AdminUser/Product/ApiKey), Initial-Migration läuft.
+- NextAuth-Credentials + TOTP (argon2id + otplib, Replay-Schutz + In-Memory-Rate-Limit), geschützte `/admin`-Routes (Middleware + Server-Session als Defense-in-Depth).
+- Bootstrap-CLI (`pnpm admin:bootstrap`) für den initialen Owner-Account.
+- Health-Endpoint mit DB-Ping, KeyProvider (File > ENV) mit 32-Byte-Validation und Permission-Check.
+- Docker-Compose (Postgres + App-Container mit Hot-Reload), Multi-Stage-Dockerfile mit `runtime`-Target.
+- Vitest mit 16 Tests grün (KeyProvider, Password, TOTP, Rate-Limit).
+- GitHub Actions CI (`.github/workflows/ci.yml`): install + prisma generate + lint + typecheck + test.
 
 ## Was hängt
-- Nichts hängt — alle Vorarbeiten für Phase 1 abgeschlossen.
+- Multi-Stage-Dockerfile-`runtime`-Target: noch nicht End-to-End-gebaut/getestet.
+- Manueller Browser-Login-Klick mit Authenticator-App: bisher nur curl-/Route-Verifikation.
 
 ## Nächste Schritte
-1. Zweiter Commit mit Architektur- und Payment-Updates.
-2. Push auf GitHub (`main`).
-3. Auf explizites „Go für Phase 1" warten.
-4. Phase 1 starten (siehe `PHASEN.md`).
+1. Commit + Push der Phase-1-Foundation.
+2. Auf explizites „Go für Phase 2" warten.
+3. Phase 2 starten: Datenmodell komplett (SigningKey, Customer, License, Activation, AuditLog), Admin-CRUD-UIs, programmatische Admin-API, License-Key-Generator mit Checksum, ApiKey-Auth-Middleware.
 
 ---
 

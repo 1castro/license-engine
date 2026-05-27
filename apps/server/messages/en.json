@@ -1,0 +1,36 @@
+{
+  "app": {
+    "name": "License Engine",
+    "tagline": "License management for the tropicsoft product family"
+  },
+  "nav": {
+    "dashboard": "Overview",
+    "products": "Products",
+    "customers": "Customers",
+    "licenses": "Licenses",
+    "apiKeys": "API keys",
+    "auditLog": "Audit log",
+    "settings": "Settings",
+    "logout": "Sign out"
+  },
+  "auth": {
+    "loginTitle": "Sign in",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "totpLabel": "TOTP code",
+    "submit": "Sign in",
+    "errorInvalidCredentials": "Email, password or TOTP code is wrong.",
+    "errorRateLimited": "Too many attempts. Please wait a moment."
+  },
+  "dashboard": {
+    "title": "Overview",
+    "welcome": "Welcome, {name}.",
+    "placeholder": "Management will arrive in Phase 2."
+  },
+  "common": {
+    "loading": "Loading…",
+    "back": "Back",
+    "save": "Save",
+    "cancel": "Cancel"
+  }
+}

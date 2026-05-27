@@ -1,0 +1,51 @@
+{
+  "name": "@license-engine/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "License Engine — Next.js server, admin UI and public API.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio",
+    "admin:bootstrap": "tsx scripts/bootstrap-admin.ts"
+  },
+  "dependencies": {
+    "@license-engine/shared-types": "workspace:*",
+    "@node-rs/argon2": "^2.0.0",
+    "@prisma/client": "^5.22.0",
+    "jose": "^5.9.6",
+    "next": "^14.2.32",
+    "next-auth": "^4.24.10",
+    "next-intl": "^3.26.0",
+    "otplib": "^12.0.1",
+    "pino": "^9.5.0",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^14.2.32",
+    "pino-pretty": "^11.3.0",
+    "postcss": "^8.4.49",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.0"
+  }
+}

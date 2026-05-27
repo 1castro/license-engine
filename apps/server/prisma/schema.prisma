@@ -1,0 +1,68 @@
+// License Engine — Prisma schema.
+//
+// Tag-1 scope: AdminUser, Product, ApiKey.
+// SigningKey, Customer, License, Activation, AuditLog land in Phase 2.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AdminRole {
+  owner
+  operator
+  readonly
+}
+
+enum RevocationStrategy {
+  recheck
+  refresh
+}
+
+model AdminUser {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  passwordHash     String
+  totpSecret       String
+  /// Last TOTP step (Unix-time / 30s) successfully consumed by this user.
+  /// Replay defense: a code valid for window N may not be used twice.
+  totpLastUsedStep BigInt    @default(0)
+  role             AdminRole @default(owner)
+  createdAt        DateTime  @default(now())
+  lastLoginAt      DateTime?
+
+  @@index([email])
+}
+
+model Product {
+  id                   String             @id @default(cuid())
+  slug                 String             @unique
+  name                 String
+  featureCatalog       Json               @default("[]")
+  revocationStrategy   RevocationStrategy @default(recheck)
+  recheckIntervalHours Int                @default(24)
+  jwtLifetimeHours     Int                @default(168)
+  licenseKeyPrefix     String             @default("TROP")
+  // signingKeyId comes in Phase 2 together with SigningKey model.
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([slug])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  keyHash    String    @unique
+  scopes     Json      @default("[]")
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  @@index([revokedAt])
+}

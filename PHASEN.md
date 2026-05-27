@@ -6,7 +6,19 @@ Detaillierte Phasen- und Task-Planung. Tasks werden während der Umsetzung verfe
 
 ## Phase 1 — Foundation
 
-**Status:** geplant — wartet auf „Go für Phase 1"
+**Status:** done (2026-05-27).
+
+**Verifikation:**
+- `pnpm typecheck`, `pnpm lint`, `pnpm test` (16 Tests) — alle grün.
+- `pnpm build` (Next.js Production Build) — alle Routes kompilieren.
+- `docker compose up -d postgres` → Postgres healthy.
+- `prisma migrate dev --name init` → Migration `20260527092225_init` läuft sauber.
+- `pnpm admin:bootstrap` → Owner-Account erzeugt, otpauth-URL ausgegeben.
+- `pnpm dev` startet, `GET /api/health` → 200 mit DB-OK, `GET /admin` (unauth) → 307 zu `/login?next=…`, `GET /login` → 200.
+
+**Offen für Phase 2 / nachgelagert:**
+- Multi-Stage-Dockerfile (Target `runtime`) ist geschrieben, aber Image-Build noch nicht End-to-End getestet.
+- Browser-Klick-Verifikation des TOTP-Login-Flows — bisher nur curl-Verifikation der Routes; manueller Login-Test wenn Jan eine Authenticator-App bereit hat.
 
 ### Tasks
 1. Monorepo-Setup mit pnpm Workspaces (`apps/server`, `packages/sdk-js`, `packages/shared-types`)

@@ -1,0 +1,63 @@
+# Local development stack: PostgreSQL + the Next.js server in watch mode.
+#
+# Production deploy can reuse the same compose file by overriding env values
+# and pointing DATABASE_URL at an external DB (multi-host setup).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: license-engine-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: license_engine
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-license_engine_dev}
+      POSTGRES_DB: license_engine
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U license_engine -d license_engine"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    container_name: license-engine-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://license_engine:${POSTGRES_PASSWORD:-license_engine_dev}@postgres:5432/license_engine?schema=public
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      JWT_ISSUER: ${JWT_ISSUER:-license.local}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ENCRYPTION_KEY_FILE: ${ENCRYPTION_KEY_FILE:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount source for hot-reload. node_modules stay inside the image.
+      - ./apps/server/src:/app/apps/server/src
+      - ./apps/server/messages:/app/apps/server/messages
+      - ./apps/server/prisma:/app/apps/server/prisma
+      - ./packages:/app/packages
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  postgres-data:
