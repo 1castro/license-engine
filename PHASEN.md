@@ -106,9 +106,31 @@ Detaillierte Phasen- und Task-Planung. Tasks werden während der Umsetzung verfe
 
 ## Phase 3 — Token-Engine
 
-**Status:** geplant
+**Status:** done (2026-05-27).
 
-Voraussichtlicher Scope:
+**Verifikation:**
+- `pnpm typecheck`, `pnpm lint` grün, `pnpm test` 80 Tests grün (12 neu: 5 envelope, 7 token-service), `pnpm build` grün inkl. 4 neuer Public-API-Routes.
+- End-to-End-curl-Flow gegen avatar-pro:
+  - `POST /api/v1/activate` mit Lizenz `TR0P-Y1C7-…-CHS0` + domain-Binding → 200 mit JWT.
+  - JWT-Header `{alg:EdDSA, kid:cmpnykref…, typ:JWT}`, Payload mit `iss`, `aud=avatar-pro`, `sub=<license-id>`, `iat`, `nbf`, `exp` (+7d), `jti`, `licenseKey`, `features=["voice"]`, `bindings=[{type:domain, hash:c55f8889…}]`.
+  - `POST /api/v1/recheck` mit demselben Token → 200 `{status:"active", token:<new>, expiresAt:…}`.
+  - `POST /api/v1/deactivate` → `{released:true}`, zweiter Aufruf → `{released:false}` (idempotent).
+  - `GET /api/v1/.well-known/public-keys` → 1 Eintrag für avatar-pro (active=true).
+- Negativtests:
+  - Falscher productSlug → 404 `license_not_active`.
+  - Malformed licenseKey (kaputte Checksum) → 400 `invalid_license_key`.
+  - Token-Tampering (1 Byte in Signature geflippt) → 401 `token_invalid_signature` + Audit-Event `token.verify_failed`.
+  - Revoked License → recheck antwortet `{status:"revoked", revokedAt:…}`, kein neuer Token.
+- AuditLog: 4 Phase-3-Events sauber (`activation.created` × 2 (Activation-Level + License-Level), `activation.released`, `token.verify_failed`), alle IPs gehasht, `actorType=anonymous` für Public-API-Calls.
+- One-Shot-Script `scripts/phase3-bootstrap.ts` backfillt SigningKey für Produkte aus Phase 2 (avatar-pro hatte vor Phase 3 noch keinen).
+
+**Offen / abweichend:**
+- Multi-Stage-Dockerfile-`runtime`-Target weiterhin nicht End-to-End-gebaut.
+- Rate-Limiter ist In-Memory (`activateLimiter` 10/min, `recheckLimiter` 60/min pro IP-Hash). Bei Multi-Instance-Deploy muss das auf Redis o.ä. heben.
+- BindingPolicy-Schema im Activate-Pfad ist `.strip()`-lenient (legacy `{types:[…]}` aus Phase-2-Lizenzen wird toleriert, unbekannte Keys gedroppt). Die strikte Form `{required?:[…], maxPerType?:{…}}` ist für neue Lizenzen das Zielformat.
+- Key-Rotation: Funktion `rotateSigningKey(product, ctx)` ist implementiert, Admin-UI-Trigger dafür kommt mit Phase 5 (Härtung).
+
+**Voraussichtlicher Scope (war Phase-3-Plan):**
 - Ed25519-Key-Generierung über `KeyProvider`-Interface (KEK lädt verschlüsselten Private-Key)
 - Key-Rotation-Workflow (alte Keys für Verifikation behalten, neue fürs Signing)
 - JWT-Signing mit `jose`, Claim-Mapping (`iss`, `aud`, `sub`, `exp`, `nbf`, `kid`, Custom-Claims für Bindings + Features)

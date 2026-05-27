@@ -1,6 +1,6 @@
 # PROJEKTSTATUS — License Engine
 
-**Aktueller Stand:** Phase 2 (Datenmodell + Admin-CRUD) done. Wartet auf Go für Phase 3.
+**Aktueller Stand:** Phase 3 (Token-Engine) done. Wartet auf Go für Phase 4.
 
 **Letztes Update:** 2026-05-27
 
@@ -15,14 +15,17 @@
 - AuditLog-Writer mit IP-Hash via HMAC-SHA256 (stable Pseudonymisierung), Metadata-Scrubbing, fire-and-forget bei DB-Fehlern.
 - Admin-CRUD-UIs für Produkte, Kunden, Lizenzen, API-Keys (shadcn/ui + react-hook-form + Radix-Primitives). Forms POSTen an die Admin-API-Routes.
 - Admin-API unter `/api/admin/v1/*`: Products/Customers/Licenses/ApiKeys, Auth via Session ODER API-Key mit Scope-Check, **License- UND Customer-Create idempotent** über `(externalRef, externalSource)`.
-- Vitest mit 68 Tests grün (KeyProvider 7, Password 3, TOTP 4, Rate-Limit 2, License-Key 21, AuditLog 10, API-Key 14, API-Key-Middleware 7).
+- Vitest mit 80 Tests grün (KeyProvider 7, Password 3, TOTP 4, Rate-Limit 2, License-Key 21, AuditLog 10, API-Key 14, API-Key-Middleware 7, Envelope 5, Token-Service 7).
+- **Token-Engine** (Phase 3): Ed25519 SigningKeys werden bei Product-Create automatisch erzeugt, Private-Keys via AES-256-GCM (envelope.ts) mit KEK verschlüsselt. JWT-Signing mit `jose` (Algorithmus EdDSA, Header mit `kid`, Claims `iss/aud/sub/iat/nbf/exp/jti` + Custom `licenseKey/features/bindings`). Token-Verification pinnt Algorithmus, verhindert `alg:none` und HS256-Confusion-Attacks.
+- **Public-API** unter `/api/v1/*`: `POST /activate` (License-Key + Bindings → JWT), `POST /recheck` (JWT → erneuertes JWT oder Revocation-Signal), `POST /deactivate` (Activation freigeben, idempotent), `GET /.well-known/public-keys` (SPKI-PEM für alle Produkte, incl. rotierter Keys für Grace-Window). Rate-Limiting per IP-Hash: activate 10/min, recheck 60/min.
+- **BindingPolicy**: `{required?:[…], maxPerType?:{…}}`. `applyBindings` enforced required types und per-type-Quota, resurrected released Activations bei Wiedersehen.
 
 ## Was hängt
 - Multi-Stage-Dockerfile-`runtime`-Target: noch nicht End-to-End-gebaut/getestet.
 
 ## Nächste Schritte
-1. Auf explizites „Go für Phase 3" warten.
-2. Phase 3 starten: Ed25519-Key-Management (über `KeyProvider`-Interface), JWT-Signing mit `jose`, Endpoints `/api/v1/activate`, `/api/v1/recheck`, `/api/v1/deactivate`, `/api/v1/.well-known/public-keys`. Key-Rotation-Workflow. Rate-Limiting auf öffentlichen Endpoints. Tests für Sign/Verify-Roundtrip, Algorithmus-Pinning, Replay-Schutz, Binding-Validierung.
+1. Auf explizites „Go für Phase 4" warten.
+2. Phase 4 starten: JS/TS-SDK (`@tropicsoft/license-sdk-js`) — Framework-agnostic Core, Storage-Adapter (Browser IndexedDB, Node FS), Offline-Validierung gegen die `/.well-known/public-keys`, Grace-Period-Verhalten, Binding-Kontext-Erfassung, Fehler-Klassen, React-Bindings als optionales Sub-Paket, Demo-Integration in einer Mini-App.
 
 ---
 

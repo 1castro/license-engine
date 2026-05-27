@@ -4,6 +4,49 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-05-27 — Phase 3 Token-Engine komplett
+
+### Bundle A — Crypto + SigningKey-Service
+- `src/lib/crypto/envelope.ts`: AES-256-GCM-Envelope (12-Byte-Nonce + Ciphertext + 16-Byte-Tag, base64-codiert). Encrypt/Decrypt nutzen KEK aus `KeyProvider`. 5 Tests: Roundtrip, Random-Nonce, Tampered-Tag-Reject, Tampered-Ciphertext-Reject, Too-Short-Blob.
+- `src/lib/signing/signing-key-service.ts`: `generateAndStoreSigningKey` (Ed25519 via `jose.generateKeyPair`, Private als PKCS8-PEM envelope-encrypted, Public als SPKI-PEM plain, Transaktion: neuer Key + alte deaktivieren + Product.activeSigningKeyId setzen), `rotateSigningKey`, `getActiveSigningKey`, `getAllPublicKeysForProduct`, `listAllPublicKeys`. AuditLog `signing_key.created` / `signing_key.rotated`.
+- `createProduct`-Hook ruft `generateAndStoreSigningKey` automatisch beim Anlegen eines Produkts auf — kein separater Admin-Klick nötig.
+
+### Bundle B — Token-Service
+- `src/lib/token/token-service.ts`: `signLicenseToken` (Header `alg:EdDSA`, `kid:<SigningKey.id>`, Claims `iss/aud=product.slug/sub=license.id/iat/nbf/exp/jti` + Custom `licenseKey/features/bindings`). `verifyLicenseToken` mit Header-Pre-Peek + Algorithmus-Pinning + Audience-Check + Multi-Key-Lookup (für Rotation-Grace). Typed `TokenVerificationError` mit Code-Klassen `invalid_signature/expired/malformed/unknown_kid/audience_mismatch`.
+- 7 Tests: gültiger EdDSA-Token + matching Key, Reject `alg:none`, Reject HS256-Confusion-Attack (Public-Key als HMAC-Secret), Wrong-Audience-Reject, Expired-Reject, Wrong-Key-Reject, SPKI-PEM-Roundtrip.
+
+### Bundle C — Binding + Activation
+- `src/lib/binding/binding-policy.ts`: Zod-Schema `{required?: BindingType[], maxPerType?: Record<BindingType, number>}`, lenient (unbekannte Keys gedroppt für Forward-Compat mit Phase-2-Lizenzen). `assertRequiredBindingsProvided`, `maxActivationsFor`, typed `BindingPolicyViolationError`.
+- `src/lib/binding/binding-hash.ts`: `hashBindingValue(type, value)` = SHA-256(`type:value`) — Type im Digest verhindert Cross-Type-Match.
+- `src/lib/binding/activation-service.ts`: `applyBindings(license, incoming, ip)` (Policy-Check, Per-Binding-Lookup, Resurrect-released-Activation, Quota-Check vor Insert, AuditLog `activation.created` pro neuer Aktivierung). `releaseActivation(license, type, value, ip)` (idempotent, AuditLog `activation.released`).
+
+### Bundle D — Public-API
+- `POST /api/v1/activate`: License-Key validieren + normalisieren → License + Product laden → Status/Expiry-Check → `applyBindings` → JWT signieren + License-level AuditLog `activation.created`. Uniform 404 `license_not_active` für unbekannten Key, falsches Product oder revoked License (kein User-Enumeration).
+- `POST /api/v1/recheck`: Product per slug laden → `verifyLicenseToken` (mit `kid`-Lookup) → bei `TokenVerificationError` 401 + AuditLog `token.verify_failed`. License-Status prüfen: `revoked`/`expired` → `{status:…}`-Antwort ohne neuen Token; sonst neuer Token mit gleichen Bindings.
+- `POST /api/v1/deactivate`: Token verifizieren → `releaseActivation` aufrufen. Idempotent (`released:false` wenn bereits released).
+- `GET /api/v1/.well-known/public-keys`: alle SigningKeys mit `kid/productId/productSlug/algorithm/publicKey(SPKI)/isActive/createdAt/rotatedAt`, Cache-Control 5min.
+- Rate-Limiting: `activateLimiter` 10/min, `recheckLimiter` 60/min pro IP-Hash (in-memory Token-Bucket).
+
+### Bundle E — Verifikation
+- typecheck/lint/test (80 grün) + build (4 neue Public-Routes kompiliert).
+- `scripts/phase3-bootstrap.ts` backfillt SigningKey für avatar-pro (Phase-2-Produkt ohne Key).
+- E2E-curl gegen avatar-pro: Activate (Token kommt zurück, Payload korrekt) → Recheck (neuer Token, status:active) → Deactivate (released:true, zweiter Aufruf released:false) → Well-Known (1 Eintrag avatar-pro).
+- Negativtests: wrong productSlug → 404, malformed Key → 400, tampered Token → 401 + Audit-Event, revoked License → `{status:"revoked"}`.
+- AuditLog (Postgres): 4 Phase-3-Events sauber, IP-Hashes konsistent zu Phase 2, `actorType=anonymous` für public calls.
+
+### Designentscheidungen
+- Envelope-Encrypt: AES-256-GCM (authenticated encryption, kein separater MAC nötig).
+- SigningKey-Erzeugung: automatisch beim createProduct (anstatt Admin-Button).
+- BindingPolicy-Schema im Read-Pfad lenient (`.strip()`), für Forward-Compat.
+- Binding-Hash: SHA-256(`type:value`), kein Salt (Werte sind opake Identifier).
+- JWT-Lifetime: pro Produkt aus `jwtLifetimeHours` (Default 168 = 7d), iat/nbf/exp/jti immer gesetzt.
+
+### Nächster Schritt
+- Phase-3-Bundle committen + pushen.
+- Auf Phase-4-Go warten: JS/TS-SDK (`@tropicsoft/license-sdk-js`) mit Activate/Validate/Recheck/Deactivate, Storage-Adapter, Offline-Validierung gegen die hier veröffentlichten Public-Keys, Grace-Period, Demo-Integration.
+
+---
+
 ## 2026-05-27 — Customer-Create idempotent nachgezogen
 
 - `createCustomer` in `customer-service.ts` analog zu `createLicense` umgebaut: bei `externalRef` + `externalSource !== 'manual'` → erst `findUnique` über die unique-Constraint, bei Treffer return `{ customer: existing, created: false }`, sonst neu anlegen mit `{ customer: new, created: true }`.

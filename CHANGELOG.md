@@ -7,6 +7,21 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Added — Phase 3 Token-Engine
+- AES-256-GCM-Envelope-Encryption (`src/lib/crypto/envelope.ts`) für SigningKey.privateKeyEncrypted, mit KEK aus dem KeyProvider. 5 Tests grün (Roundtrip, Random-Nonce, Tampered-Tag-Reject, Tampered-Ciphertext-Reject, Too-Short-Blob).
+- SigningKey-Service (`src/lib/signing/signing-key-service.ts`): Ed25519-Keypair-Generierung über `jose`, Hook in `createProduct` für automatische Erzeugung, Rotate-Funktion (alte Keys bleiben für Verifikation), `getActiveSigningKey`, `getAllPublicKeysForProduct`, `listAllPublicKeys`.
+- Token-Service (`src/lib/token/token-service.ts`): `signLicenseToken` (Header `alg:EdDSA + kid`, Claims iss/aud/sub/iat/nbf/exp/jti + Custom licenseKey/features/bindings), `verifyLicenseToken` mit Algorithmus-Pinning (kein `alg:none`, kein HS256-Confusion), Multi-Key-Lookup für Rotation-Grace. 7 Tests grün.
+- BindingPolicy (`src/lib/binding/binding-policy.ts`): `{required?, maxPerType?}`-Schema, lenient parsing für Forward-Compat. `BindingPolicyViolationError` mit `missing_required` / `max_exceeded`.
+- Binding-Hash (`src/lib/binding/binding-hash.ts`): `hashBindingValue(type, value)` = SHA-256(`type:value`), Type im Digest verhindert Cross-Type-Match.
+- Activation-Service (`src/lib/binding/activation-service.ts`): `applyBindings` (Policy-Check + Resurrect-released + Quota-Enforcement + Audit), `releaseActivation` (idempotent + Audit).
+- Public-API unter `/api/v1/`:
+  - `POST /activate` mit License-Key + Bindings → signed JWT, Rate-Limit 10/min/IP.
+  - `POST /recheck` mit Token → erneuertes Token oder `{status:"revoked"|"expired"}`. Rate-Limit 60/min/IP.
+  - `POST /deactivate` mit Token + Binding → Activation freigeben. Idempotent.
+  - `GET /.well-known/public-keys` mit SPKI-PEM-Listing aller Produkte, 5min Cache-Control.
+- Rate-Limiter um `activateLimiter` (10/min) und `recheckLimiter` (60/min) erweitert, beide IP-Hash-basiert.
+- One-Shot-Skript `scripts/phase3-bootstrap.ts`: backfillt SigningKeys für vor Phase 3 angelegte Produkte.
+
 ### Changed
 - `createCustomer` ist jetzt idempotent über `(externalRef, externalSource)` — analog zur License-Erstellung. Mehrfache POSTs mit gleicher externer Referenz liefern die existierende Customer-ID mit 200 statt 409. Schließt die Phase-2-Abweichung vom Briefing.
 

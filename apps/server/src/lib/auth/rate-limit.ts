@@ -52,3 +52,22 @@ export const loginLimiter = createInMemoryRateLimiter({
   capacity: 5,
   refillTokensPerMinute: 5,
 });
+
+/**
+ * Public activate endpoint: 10 per minute per IP-hash.
+ * Tight enough to make license-key guessing painful, loose enough to handle
+ * a user retrying after a typo.
+ */
+export const activateLimiter = createInMemoryRateLimiter({
+  capacity: 10,
+  refillTokensPerMinute: 10,
+});
+
+/**
+ * Re-check is called by every active client every Re-Check-Interval (default 24h).
+ * 60/min/IP handles a small fleet sharing a NAT without burdening honest clients.
+ */
+export const recheckLimiter = createInMemoryRateLimiter({
+  capacity: 60,
+  refillTokensPerMinute: 60,
+});

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../prisma';
 import { writeAuditLog, AuditEventType } from '../audit';
 import { canonicalizePrefix } from '../license/license-key';
+import { generateAndStoreSigningKey } from '../signing/signing-key-service';
 import type { AdminAuthContext } from '../auth/admin-route-auth';
 import { actorOf } from '../auth/admin-route-auth';
 
@@ -71,7 +72,13 @@ export async function createProduct(
     metadata: { slug: product.slug, name: product.name },
     ip: ctx.ip,
   });
-  return product;
+
+  // Auto-provision an Ed25519 signing key for the new product. Without it the
+  // first activate call would fail because there's nothing to sign with.
+  await generateAndStoreSigningKey({ id: product.id, slug: product.slug }, ctx);
+
+  // Re-read so the returned product has activeSigningKeyId populated.
+  return (await prisma.product.findUniqueOrThrow({ where: { id: product.id } }));
 }
 
 export async function updateProduct(

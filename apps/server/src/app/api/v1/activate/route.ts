@@ -1,0 +1,123 @@
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
+import { LicenseStatus, type License } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
+import { getLogger } from '@/lib/logger';
+import { extractIp, hashIp, writeAuditLog, AuditEventType } from '@/lib/audit';
+import { activateLimiter } from '@/lib/auth/rate-limit';
+import { normalizeLicenseKey } from '@/lib/license/license-key';
+import {
+  applyBindings,
+  incomingBindingSchema,
+} from '@/lib/binding/activation-service';
+import { BindingPolicyViolationError } from '@/lib/binding/binding-policy';
+import { signLicenseToken } from '@/lib/token/token-service';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+const activateRequestSchema = z.object({
+  licenseKey: z.string().min(1),
+  productSlug: z.string().min(1),
+  bindings: z.array(incomingBindingSchema).default([]),
+});
+
+function jsonError(status: number, code: string, message: string, details?: unknown) {
+  return NextResponse.json({ error: { code, message, details } }, { status });
+}
+
+export async function POST(req: Request) {
+  const log = getLogger();
+  const ip = extractIp(req);
+  const ipHashForLimit = hashIp(ip) ?? 'no-ip';
+
+  if (!activateLimiter.tryConsume(ipHashForLimit)) {
+    return jsonError(429, 'rate_limited', 'Too many activation attempts, slow down');
+  }
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return jsonError(400, 'invalid_json', 'Request body must be valid JSON');
+  }
+  const parsed = activateRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return jsonError(400, 'validation_error', 'Invalid activation payload', parsed.error.format());
+  }
+
+  const canonicalKey = normalizeLicenseKey(parsed.data.licenseKey);
+  if (!canonicalKey) {
+    return jsonError(400, 'invalid_license_key', 'License key format / checksum invalid');
+  }
+
+  const license: (License & { product: { slug: string; jwtLifetimeHours: number } | null }) | null =
+    await prisma.license.findUnique({
+      where: { licenseKey: canonicalKey },
+      include: { product: { select: { slug: true, jwtLifetimeHours: true } } },
+    });
+
+  // Uniform "license not active" response — do not leak whether the key exists.
+  if (!license || !license.product || license.product.slug !== parsed.data.productSlug) {
+    log.warn({ event: 'activate.unknown_or_wrong_product' }, 'Activate rejected');
+    return jsonError(404, 'license_not_active', 'License not found, expired or does not belong to this product');
+  }
+
+  if (license.status !== LicenseStatus.active) {
+    return jsonError(403, 'license_not_active', 'License is not active');
+  }
+  if (license.expiresAt && license.expiresAt.getTime() <= Date.now()) {
+    return jsonError(403, 'license_not_active', 'License has expired');
+  }
+
+  let activationResult;
+  try {
+    activationResult = await applyBindings(license, parsed.data.bindings, ip);
+  } catch (err) {
+    if (err instanceof BindingPolicyViolationError) {
+      const status = err.reason === 'missing_required' ? 400 : 409;
+      return jsonError(status, `binding_${err.reason}`, err.message, { bindingType: err.bindingType });
+    }
+    throw err;
+  }
+
+  const featureFlags = Array.isArray(license.featureFlags)
+    ? (license.featureFlags as unknown[]).filter((v): v is string => typeof v === 'string')
+    : [];
+
+  const signed = await signLicenseToken({
+    license: {
+      id: license.id,
+      licenseKey: license.licenseKey,
+      productId: license.productId,
+      featureFlags,
+    },
+    product: { slug: license.product.slug, jwtLifetimeHours: license.product.jwtLifetimeHours },
+    bindings: activationResult.activations.map((a) => ({
+      type: a.bindingType,
+      hash: a.bindingValueHash,
+    })),
+  });
+
+  // Audit the activation event at the license level (per-activation audit is
+  // already written inside applyBindings for each new Activation row).
+  if (activationResult.newlyCreated > 0) {
+    await writeAuditLog({
+      eventType: AuditEventType.ActivationCreated,
+      actorType: 'anonymous',
+      actorId: null,
+      targetType: 'License',
+      targetId: license.id,
+      metadata: { newActivations: activationResult.newlyCreated },
+      ip,
+    });
+  }
+
+  return NextResponse.json({
+    token: signed.token,
+    expiresAt: signed.expiresAt.toISOString(),
+    recheckIntervalHours: await prisma.product
+      .findUniqueOrThrow({ where: { id: license.productId }, select: { recheckIntervalHours: true } })
+      .then((p) => p.recheckIntervalHours),
+  });
+}
