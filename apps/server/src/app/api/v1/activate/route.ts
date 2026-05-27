@@ -9,6 +9,7 @@ import { normalizeLicenseKey } from '@/lib/license/license-key';
 import {
   applyBindings,
   incomingBindingSchema,
+  LicenseStateChangedError,
   MAX_BINDINGS_PER_ACTIVATE,
 } from '@/lib/binding/activation-service';
 import { BindingPolicyViolationError } from '@/lib/binding/binding-policy';
@@ -106,6 +107,12 @@ export async function POST(req: Request) {
     if (err instanceof BindingPolicyViolationError) {
       const status = err.reason === 'missing_required' ? 400 : 409;
       return jsonError(status, `binding_${err.reason}`, err.message, { bindingType: err.bindingType });
+    }
+    if (err instanceof LicenseStateChangedError) {
+      // Lost the race: license was revoked/expired between our initial read
+      // and the FOR-UPDATE lock. Surface as license_not_active so the client
+      // re-evaluates from scratch.
+      return jsonError(403, 'license_not_active', `License became ${err.newStatus} during activation`);
     }
     throw err;
   }

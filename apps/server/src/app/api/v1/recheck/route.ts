@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { ActivationStatus, LicenseStatus, type License } from '@prisma/client';
+import { ActivationStatus, BindingType, LicenseStatus, type License } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { extractIp, hashIp, writeAuditLog, AuditEventType } from '@/lib/audit';
 import { recheckLimiter } from '@/lib/auth/rate-limit';
@@ -125,21 +125,31 @@ export async function POST(req: Request) {
   // Filter bindings: drop any whose Activation has been released since the
   // previous token was issued. A device that was deactivated must not silently
   // regain access via recheck — its binding stops being part of the token.
-  const tokenBindings: Array<{ type: string; hash: string }> = Array.isArray(claims.bindings)
-    ? (claims.bindings as Array<{ type: string; hash: string }>).filter(
-        (b): b is { type: string; hash: string } =>
-          typeof b?.type === 'string' && typeof b?.hash === 'string',
-      )
+  // Also whitelist `type` against the BindingType enum: unknown values (e.g.
+  // a forward-compat token from a future schema) are treated as "not active"
+  // instead of being fed raw into a Prisma enum query (which would 500).
+  const knownBindingTypes = new Set<string>(Object.values(BindingType));
+  const tokenBindings: Array<{ type: BindingType; hash: string }> = Array.isArray(claims.bindings)
+    ? (claims.bindings as Array<{ type: unknown; hash: unknown }>)
+        .filter(
+          (b): b is { type: string; hash: string } =>
+            typeof b?.type === 'string' &&
+            typeof b?.hash === 'string' &&
+            knownBindingTypes.has(b.type),
+        )
+        .map((b) => ({ type: b.type as BindingType, hash: b.hash }))
     : [];
+  // True iff the previous token had bindings (any, regardless of validity).
+  const tokenHadBindings = Array.isArray(claims.bindings) && claims.bindings.length > 0;
 
-  let activeBindings: Array<{ type: string; hash: string }> = [];
+  let activeBindings: Array<{ type: BindingType; hash: string }> = [];
   if (tokenBindings.length > 0) {
     const activeRows = await prisma.activation.findMany({
       where: {
         licenseId: license.id,
         status: ActivationStatus.active,
         OR: tokenBindings.map((b) => ({
-          bindingType: b.type as never,
+          bindingType: b.type,
           bindingValueHash: b.hash,
         })),
       },
@@ -147,6 +157,18 @@ export async function POST(req: Request) {
     });
     const stillActive = new Set(activeRows.map((r) => `${r.bindingType}|${r.bindingValueHash}`));
     activeBindings = tokenBindings.filter((b) => stillActive.has(`${b.type}|${b.hash}`));
+  }
+
+  // If the previous token carried bindings but every single one of them has
+  // been released since (or contains only unknown types), we refuse to re-issue
+  // a token. Issuing one would let a deactivated client keep validating until
+  // exp — the intent of deactivate is exactly the opposite. Force re-activate.
+  if (tokenHadBindings && activeBindings.length === 0) {
+    return jsonError(
+      403,
+      'license_not_active',
+      'All bindings have been released for this token — call activate() again',
+    );
   }
 
   const signed = await signLicenseToken({
@@ -157,7 +179,7 @@ export async function POST(req: Request) {
       featureFlags,
     },
     product: { slug: product.slug, jwtLifetimeHours: product.jwtLifetimeHours },
-    bindings: activeBindings.map((b) => ({ type: b.type as never, hash: b.hash })),
+    bindings: activeBindings.map((b) => ({ type: b.type, hash: b.hash })),
   });
 
   return NextResponse.json({

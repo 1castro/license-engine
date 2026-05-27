@@ -1,4 +1,4 @@
-import { importSPKI, jwtVerify } from 'jose';
+import { errors as joseErrors, importSPKI, jwtVerify } from 'jose';
 import type { LicenseTokenClaims, PublicKeyEntry } from './types';
 import { LicenseTokenInvalidError } from './errors';
 
@@ -70,13 +70,16 @@ export async function verifyLicenseToken(input: {
     });
     return payload as unknown as LicenseTokenClaims;
   } catch (err) {
+    // Use jose's typed error classes — message-regex would silently mis-classify
+    // when jose changes its wording. JWTExpired is a sub-class of
+    // JWTClaimValidationFailed, so order matters.
+    if (err instanceof joseErrors.JWTExpired) {
+      throw new LicenseTokenInvalidError('expired', err.message);
+    }
+    if (err instanceof joseErrors.JWTClaimValidationFailed && err.claim === 'aud') {
+      throw new LicenseTokenInvalidError('audience_mismatch', err.message);
+    }
     const message = err instanceof Error ? err.message : 'unknown';
-    if (/expired/i.test(message)) {
-      throw new LicenseTokenInvalidError('expired', message);
-    }
-    if (/audience/i.test(message)) {
-      throw new LicenseTokenInvalidError('audience_mismatch', message);
-    }
     throw new LicenseTokenInvalidError('signature_invalid', message);
   }
 }

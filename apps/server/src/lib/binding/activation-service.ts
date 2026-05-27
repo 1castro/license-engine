@@ -1,6 +1,7 @@
 import {
   ActivationStatus,
   BindingType,
+  LicenseStatus,
   Prisma,
   type Activation,
   type License,
@@ -31,6 +32,17 @@ export type IncomingBinding = z.infer<typeof incomingBindingSchema>;
 export interface ActivationResult {
   activations: Activation[];
   newlyCreated: number;
+}
+
+/** Thrown when applyBindings observes the license has become non-active between
+ *  the initial read and the transactional re-check inside the FOR-UPDATE-lock. */
+export class LicenseStateChangedError extends Error {
+  constructor(
+    public readonly newStatus: LicenseStatus | 'expired_by_time' | 'missing',
+  ) {
+    super(`License state changed before activation: ${newStatus}`);
+    this.name = 'LicenseStateChangedError';
+  }
 }
 
 /**
@@ -66,9 +78,25 @@ export async function applyBindings(
   );
 
   const { activations, newlyCreatedIds } = await prisma.$transaction(async (tx) => {
-    // Pessimistic lock on the License row — serializes concurrent activates
-    // for the same license so quota checks can't race with inserts.
-    await tx.$queryRaw`SELECT id FROM "License" WHERE id = ${license.id} FOR UPDATE`;
+    // Pessimistic lock + status re-check on the License row. The route layer
+    // already verified the license is active before calling us, but between
+    // that read and acquiring the FOR-UPDATE lock the row could have been
+    // revoked or expired by an admin or the cron job. We refuse to create new
+    // Activation rows in that case — otherwise a token would be signed for a
+    // license that is no longer eligible.
+    const locked = await tx.$queryRaw<
+      Array<{ id: string; status: LicenseStatus; expires_at: Date | null }>
+    >`SELECT id, status, "expiresAt" AS expires_at FROM "License" WHERE id = ${license.id} FOR UPDATE`;
+    const row = locked[0];
+    if (!row) {
+      throw new LicenseStateChangedError('missing');
+    }
+    if (row.status !== LicenseStatus.active) {
+      throw new LicenseStateChangedError(row.status);
+    }
+    if (row.expires_at && row.expires_at.getTime() <= Date.now()) {
+      throw new LicenseStateChangedError('expired_by_time');
+    }
 
     const activations: Activation[] = [];
     const newlyCreatedIds: { id: string; bindingType: BindingType }[] = [];
