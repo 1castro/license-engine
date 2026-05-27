@@ -6,6 +6,8 @@ import {
   validateLicenseKey,
 } from '../../src/lib/license/license-key';
 
+const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
 describe('canonicalizePrefix', () => {
   it('uppercases input', () => {
     expect(canonicalizePrefix('trop')).toBe('TR0P');
@@ -90,23 +92,6 @@ describe('validateLicenseKey', () => {
     expect(validateLicenseKey(`  ${key}\n`).valid).toBe(true);
   });
 
-  it('rejects a key with a flipped character', () => {
-    const key = generateLicenseKey('TROP');
-    // Flip one payload char in group 1 (index 5: just after "TR0P-")
-    const flippedChar = key[5] === 'A' ? 'B' : 'A';
-    const broken = key.slice(0, 5) + flippedChar + key.slice(6);
-    expect(validateLicenseKey(broken).valid).toBe(false);
-  });
-
-  it('rejects a key with two groups swapped', () => {
-    const key = generateLicenseKey('TROP');
-    // Original: PREFIX-G1-G2-G3-G4 → swap G2 and G3
-    const parts = key.split('-');
-    [parts[2], parts[3]] = [parts[3]!, parts[2]!];
-    const swapped = parts.join('-');
-    expect(validateLicenseKey(swapped).valid).toBe(false);
-  });
-
   it('rejects a key with wrong group count', () => {
     expect(validateLicenseKey('TR0P-AAAA-AAAA-AAAA').valid).toBe(false);
     expect(validateLicenseKey('TR0P-AAAA-AAAA-AAAA-AAAA-AAAA').valid).toBe(false);
@@ -126,6 +111,100 @@ describe('validateLicenseKey', () => {
     // Change TR0P → TS0P → checksum no longer matches
     const tamperedPrefix = 'TS0P' + key.slice(4);
     expect(validateLicenseKey(tamperedPrefix).valid).toBe(false);
+  });
+});
+
+// Deterministic checksum-strength tests: no randomness in the failure
+// dimension itself. Each generated key is exhaustively probed against all
+// possible single-character substitutions in every payload position, and
+// every group-swap permutation. The Damm algorithm guarantees these are
+// all detected.
+describe('validateLicenseKey – Damm strength guarantees', () => {
+  const KEYS_PER_RUN = 100;
+
+  it('rejects every single-character payload flip across 100 keys × all groups × all positions × all alphabet substitutions', () => {
+    for (let k = 0; k < KEYS_PER_RUN; k++) {
+      const key = generateLicenseKey('TROP');
+      // key layout: PREFIX-G1-G2-G3-G4. Group g starts at offset 5 + 5*g.
+      // Within each 4-char group, payload positions are local indices 0..2.
+      for (let g = 0; g < 4; g++) {
+        const groupStart = 5 + 5 * g;
+        for (let pos = 0; pos < 3; pos++) {
+          const charIdx = groupStart + pos;
+          const original = key[charIdx]!;
+          for (const sub of ALPHABET) {
+            if (sub === original) continue;
+            const flipped = key.slice(0, charIdx) + sub + key.slice(charIdx + 1);
+            const result = validateLicenseKey(flipped);
+            if (result.valid) {
+              throw new Error(
+                `Single-char flip undetected: key=${key} group=${g + 1} pos=${pos} ${original}→${sub} produced ${flipped}`,
+              );
+            }
+            expect(result.valid).toBe(false);
+          }
+        }
+      }
+    }
+  });
+
+  it('rejects every single-character check-char flip across 100 keys × all groups × all alphabet substitutions', () => {
+    for (let k = 0; k < KEYS_PER_RUN; k++) {
+      const key = generateLicenseKey('TROP');
+      for (let g = 0; g < 4; g++) {
+        const checkIdx = 5 + 5 * g + 3;
+        const original = key[checkIdx]!;
+        for (const sub of ALPHABET) {
+          if (sub === original) continue;
+          const flipped = key.slice(0, checkIdx) + sub + key.slice(checkIdx + 1);
+          expect(validateLicenseKey(flipped).valid).toBe(false);
+        }
+      }
+    }
+  });
+
+  it('rejects systematic group swaps (all 6 unordered pairs across 50 keys)', () => {
+    const pairs: [number, number][] = [
+      [0, 1],
+      [0, 2],
+      [0, 3],
+      [1, 2],
+      [1, 3],
+      [2, 3],
+    ];
+    for (let k = 0; k < 50; k++) {
+      const key = generateLicenseKey('TROP');
+      const parts = key.split('-');
+      for (const [a, b] of pairs) {
+        const swapped = parts.slice();
+        const ga = swapped[1 + a]!;
+        const gb = swapped[1 + b]!;
+        if (ga === gb) continue; // astronomically unlikely but skip
+        swapped[1 + a] = gb;
+        swapped[1 + b] = ga;
+        const result = validateLicenseKey(swapped.join('-'));
+        expect(result.valid).toBe(false);
+      }
+    }
+  });
+
+  it('rejects adjacent transpositions within payload (Damm guarantee)', () => {
+    for (let k = 0; k < 100; k++) {
+      const key = generateLicenseKey('TROP');
+      for (let g = 0; g < 4; g++) {
+        const groupStart = 5 + 5 * g;
+        // Transposition pos↔pos+1 within payload (positions 0..2). So pairs (0,1) and (1,2).
+        for (let pos = 0; pos < 2; pos++) {
+          const i = groupStart + pos;
+          const j = groupStart + pos + 1;
+          if (key[i] === key[j]) continue; // identical chars → no-op
+          const chars = key.split('');
+          [chars[i], chars[j]] = [chars[j]!, chars[i]!];
+          const transposed = chars.join('');
+          expect(validateLicenseKey(transposed).valid).toBe(false);
+        }
+      }
+    }
   });
 });
 

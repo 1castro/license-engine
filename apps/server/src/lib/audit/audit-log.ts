@@ -42,10 +42,20 @@ export function hashIp(ip: string | null | undefined): string | null {
 
 /**
  * Best-effort extraction of the client IP from a Next.js request.
- * Looks at `x-forwarded-for` (first entry) then `x-real-ip`.
- * Returns null if neither is present — never throws.
+ *
+ * Reads `x-forwarded-for` (first entry) or `x-real-ip` ONLY if
+ * `TRUST_PROXY_HEADERS=true` is set. In production behind a reverse proxy
+ * with no direct public port-mapping on the app container (the only way
+ * to reach the app is through the proxy), the proxy is the only source of
+ * these headers, so trusting them is correct.
+ *
+ * Default `TRUST_PROXY_HEADERS=false` → returns null instead of trusting
+ * attacker-supplied headers. Rate-limit buckets and audit-log IP hashes
+ * collapse to a single "no-ip" key, which is safe but coarse. Production
+ * deploys MUST set `TRUST_PROXY_HEADERS=true`.
  */
 export function extractIp(req: { headers: Headers } | Request): string | null {
+  if (!getEnv().TRUST_PROXY_HEADERS) return null;
   const xff = req.headers.get('x-forwarded-for');
   if (xff) {
     const first = xff.split(',')[0]?.trim();

@@ -7,6 +7,7 @@ import { hashPassword, verifyPassword } from '../auth/password';
 import { writeAuditLog, AuditEventType } from '../audit';
 import { getMailSender } from '../mail/mail-sender';
 import { buildResetPasswordMail, buildSetupPasswordMail } from '../mail/templates';
+import { normalizeEmail } from '../services/customer-service';
 import {
   AuthTokenInvalidError,
   consumeAuthToken,
@@ -46,12 +47,12 @@ export const resetPasswordSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  email: z.string().email().max(254),
+  email: z.string().email().max(254).transform(normalizeEmail),
   password: z.string().min(1).max(200),
 });
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().email().max(254),
+  email: z.string().email().max(254).transform(normalizeEmail),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -118,7 +119,8 @@ export async function sendSetupMail(customer: Pick<Customer, 'id' | 'email' | 'n
  * exists in the system (enumeration defense).
  */
 export async function sendResetMail(email: string): Promise<void> {
-  const customer = await prisma.customer.findFirst({ where: { email } });
+  const normalized = normalizeEmail(email);
+  const customer = await prisma.customer.findUnique({ where: { email: normalized } });
   if (!customer) {
     getLogger().info({ event: 'portal.reset_mail_unknown_email' }, 'Reset requested for unknown email');
     return;
@@ -160,12 +162,12 @@ export async function setInitialPassword(input: {
     data: { passwordHash, emailVerifiedAt: new Date() },
   });
   await writeAuditLog({
-    eventType: AuditEventType.AdminLoginSuccess, // reuse — Phase-7 may add a dedicated portal event
+    eventType: AuditEventType.PortalPasswordSet,
     actorType: 'system',
-    actorId: null,
+    actorId: customer.id,
     targetType: 'Customer',
     targetId: customer.id,
-    metadata: { op: 'portal.initial_password_set' },
+    metadata: { trigger: 'initial' },
     ip: input.ipForAudit,
   });
   return { customer };
@@ -192,12 +194,12 @@ export async function resetPassword(input: {
     data: { passwordHash },
   });
   await writeAuditLog({
-    eventType: AuditEventType.AdminLoginSuccess,
+    eventType: AuditEventType.PortalPasswordReset,
     actorType: 'system',
-    actorId: null,
+    actorId: customer.id,
     targetType: 'Customer',
     targetId: customer.id,
-    metadata: { op: 'portal.password_reset' },
+    metadata: {},
     ip: input.ipForAudit,
   });
   return { customer };
@@ -208,7 +210,8 @@ export async function resetPassword(input: {
  * PortalAuthError on failure. Caller is responsible for rate-limit + backoff.
  */
 export async function loginCustomer(input: LoginInput): Promise<Customer> {
-  const customer = await prisma.customer.findFirst({ where: { email: input.email } });
+  // input.email is already normalized by the Zod transform in loginSchema.
+  const customer = await prisma.customer.findUnique({ where: { email: input.email } });
   if (!customer || !customer.passwordHash) {
     // Run a dummy verify so timing matches the wrong-password path.
     await verifyPassword(input.password, '$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAA$AAAAAAAAAAAA');

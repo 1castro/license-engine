@@ -8,6 +8,9 @@ beforeAll(() => {
   process.env.NEXTAUTH_SECRET ??= 'test-secret-must-be-at-least-32-characters-long-yes';
   process.env.NEXTAUTH_URL ??= 'http://localhost:3000';
   process.env.ENCRYPTION_KEY ??= Buffer.from(new Uint8Array(32)).toString('base64');
+  // extractIp returns null by default unless we explicitly trust proxy headers;
+  // these tests assert the proxy-trusting branch.
+  process.env.TRUST_PROXY_HEADERS = 'true';
 });
 
 describe('hashIp', () => {

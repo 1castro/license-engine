@@ -12,7 +12,12 @@ authenticator.options = {
 
 export interface TotpVerifyResult {
   valid: boolean;
-  /** Unix-time / step at which the accepted code was logically consumed. */
+  /**
+   * Unix-time / step at which the accepted code was logically consumed.
+   * For window-accepted codes (drift), this is the actual step the code came
+   * from, NOT the current wall-clock step — that's what the replay-store
+   * needs to compare with `> lastUsedStep`.
+   */
   usedStep?: bigint;
 }
 
@@ -36,12 +41,16 @@ export async function renderTotpQrCodeDataUrl(otpauthUrl: string): Promise<strin
  * Verifies a TOTP code with replay protection.
  *
  * Replay defense: once a code from step S is accepted, no code from a step
- * <= S may be accepted again for this user. The caller persists usedStep
- * to AdminUser.totpLastUsedStep on success.
+ * <= S may be accepted again for this user. The caller persists `usedStep`
+ * to `AdminUser.totpLastUsedStep` via an ATOMIC compare-and-set
+ * (`updateMany WHERE totpLastUsedStep < usedStep`) — single-row update
+ * after this function would still race between parallel requests.
  *
- * Step granularity is 30s, so within a window an attacker who shoulder-surfs
- * a code can re-use it once at most until the user's next successful login
- * (which bumps lastUsedStep beyond it).
+ * We derive `usedStep` from `authenticator.checkDelta` (returns -1/0/+1
+ * for window-accepted codes), so a code from `nowStep-1` reports usedStep
+ * = nowStep-1 — not nowStep. That way replay-store comparison is precise
+ * and a stale code from a previous step can't be hidden by bumping the
+ * counter to nowStep.
  */
 export function verifyTotp(params: {
   token: string;
@@ -52,15 +61,17 @@ export function verifyTotp(params: {
     return { valid: false };
   }
 
-  const verified = authenticator.verify({ token: params.token, secret: params.secret });
-  if (!verified) {
+  const delta = authenticator.checkDelta(params.token, params.secret);
+  if (delta === null) {
     return { valid: false };
   }
 
   const nowStep = BigInt(Math.floor(Date.now() / 1000 / TOTP_STEP_SECONDS));
-  if (nowStep <= params.lastUsedStep) {
+  const usedStep = nowStep + BigInt(delta);
+
+  if (usedStep <= params.lastUsedStep) {
     return { valid: false };
   }
 
-  return { valid: true, usedStep: nowStep };
+  return { valid: true, usedStep };
 }

@@ -22,7 +22,30 @@ function buildLogger(): Logger {
         }
       : undefined,
     redact: {
-      paths: ['req.headers.authorization', 'req.headers.cookie', '*.password', '*.token'],
+      // Wildcard paths cover both top-level and one-level-nested objects (e.g.
+      // `{ user: { password } }` and `{ event: '...', token }`). Pino's redact
+      // does NOT recurse — keep the list aligned with what we actually log.
+      paths: [
+        'req.headers.authorization',
+        'req.headers.cookie',
+        'headers.authorization',
+        'headers.cookie',
+        '*.password',
+        '*.passwordHash',
+        '*.secret',
+        '*.totpSecret',
+        '*.token',
+        '*.accessToken',
+        '*.refreshToken',
+        '*.apiKey',
+        '*.privateKey',
+        '*.privateKeyEncrypted',
+        'password',
+        'secret',
+        'token',
+        'apiKey',
+        'privateKey',
+      ],
       censor: '[redacted]',
     },
   });

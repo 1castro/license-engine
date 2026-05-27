@@ -24,6 +24,17 @@ const envSchema = z
     SMTP_FROM: z.string().min(1).optional(),
     /** Force a specific mail transport. Default = auto (smtp if configured, else console). */
     MAIL_TRANSPORT: z.enum(['console', 'smtp']).optional(),
+    /**
+     * Opt-in: trust X-Forwarded-For / X-Real-IP headers for `extractIp`. Set
+     * to `true` in production behind a reverse proxy (NPM), where the app
+     * container has no direct public port-mapping and the proxy is the only
+     * way in. Default `false` → ignore proxy headers so attacker-supplied
+     * headers can't poison rate-limit buckets / audit-log IP hashes.
+     */
+    TRUST_PROXY_HEADERS: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
   })
   .refine((data) => data.ENCRYPTION_KEY || data.ENCRYPTION_KEY_FILE, {
     message: 'Either ENCRYPTION_KEY or ENCRYPTION_KEY_FILE must be set.',

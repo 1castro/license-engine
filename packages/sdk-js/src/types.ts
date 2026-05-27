@@ -23,7 +23,7 @@ export interface ActivateResponse {
 
 /** Server-side `/api/v1/recheck` response. */
 export type RecheckResponse =
-  | { status: 'active'; token: string; expiresAt: string }
+  | { status: 'active'; token: string; expiresAt: string; recheckIntervalHours: number }
   | { status: 'revoked'; revokedAt: string | null }
   | { status: 'expired' };
 

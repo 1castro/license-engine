@@ -106,9 +106,12 @@ export async function createLicense(
   input: LicenseCreateInput,
   ctx: AdminAuthContext,
 ): Promise<{ license: License; created: boolean }> {
-  // Idempotency: when called with a non-manual externalRef/source pair, an
-  // existing record short-circuits creation. Webhooks may retry repeatedly.
-  if (input.externalRef && input.externalSource !== 'manual') {
+  // Idempotency: any (externalSource, externalRef) pair is treated as a
+  // dedup key — webhooks and manual API callers alike. The previous variant
+  // restricted to non-manual sources, but admins importing from spreadsheets
+  // also benefit from re-import safety, and the externalRef_unique constraint
+  // covers manual anyway.
+  if (input.externalRef) {
     const existing = await prisma.license.findUnique({
       where: {
         externalRef_unique: {

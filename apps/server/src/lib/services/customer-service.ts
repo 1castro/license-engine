@@ -11,8 +11,17 @@ import { actorOf } from '../auth/admin-route-auth';
 // Validation schemas
 // -----------------------------------------------------------------------------
 
+/**
+ * Email normalization: trim + lowercase, applied at every write/lookup site
+ * so the DB-UNIQUE-constraint on `email` matches user input regardless of
+ * casing variations (Maria@… and maria@… are the same account).
+ */
+export function normalizeEmail(raw: string): string {
+  return raw.trim().toLowerCase();
+}
+
 export const customerCreateSchema = z.object({
-  email: z.string().email().max(254),
+  email: z.string().email().max(254).transform(normalizeEmail),
   name: z.string().min(1).max(200),
   company: z.string().min(1).max(200).optional(),
   notes: z.string().max(4000).optional(),
@@ -41,11 +50,10 @@ export async function createCustomer(
   input: CustomerCreateInput,
   ctx: AdminAuthContext,
 ): Promise<{ customer: Customer; created: boolean }> {
-  // Idempotency: when called with a non-manual externalRef/source pair, an
-  // existing record short-circuits creation. Webhooks (Stripe, Paddle, …)
-  // may retry repeatedly; the second call must return the same customer
-  // instead of failing with a UNIQUE violation. Mirrors createLicense.
-  if (input.externalRef && input.externalSource !== 'manual') {
+  // Idempotency: any (externalSource, externalRef) pair is treated as a
+  // dedup key — webhooks and manual API callers alike. Manual re-imports
+  // (CSV, admin script) need the same protection as Stripe/Paddle webhooks.
+  if (input.externalRef) {
     const existing = await prisma.customer.findUnique({
       where: {
         externalRef_unique: {

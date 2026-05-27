@@ -70,7 +70,11 @@ export async function setPortalSessionCookie(token: string, expiresAt: Date): Pr
     value: token,
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    // Strict: the portal is a same-origin app and the cookie should never be
+    // forwarded on cross-site navigations — kills classic CSRF without the
+    // need for a separate anti-CSRF token. Strict is safe here because there
+    // is no external SSO redirect flow that would lose the cookie.
+    sameSite: 'strict',
     path: '/',
     expires: expiresAt,
   });

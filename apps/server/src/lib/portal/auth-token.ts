@@ -64,6 +64,10 @@ export class AuthTokenInvalidError extends Error {
 /**
  * Validates and consumes (marks usedAt) a portal auth token. Throws
  * AuthTokenInvalidError on any failure.
+ *
+ * The consume step uses `updateMany WHERE usedAt IS NULL` + count===1 check,
+ * so two parallel requests with the same token can never both succeed —
+ * exactly one wins the race, the other gets `AuthTokenInvalidError('used')`.
  */
 export async function consumeAuthToken(input: {
   plaintext: string;
@@ -76,9 +80,12 @@ export async function consumeAuthToken(input: {
   if (row.usedAt !== null) throw new AuthTokenInvalidError('used');
   if (row.expiresAt.getTime() <= Date.now()) throw new AuthTokenInvalidError('expired');
 
-  await prisma.customerAuthToken.update({
-    where: { id: row.id },
+  const claimed = await prisma.customerAuthToken.updateMany({
+    where: { id: row.id, usedAt: null },
     data: { usedAt: new Date() },
   });
+  if (claimed.count !== 1) {
+    throw new AuthTokenInvalidError('used');
+  }
   return { customerId: row.customerId };
 }

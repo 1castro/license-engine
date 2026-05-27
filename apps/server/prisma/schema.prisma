@@ -87,8 +87,11 @@ model AdminUser {
 model ApiKey {
   id         String    @id @default(cuid())
   name       String
-  /// Argon2id hash of the plaintext key. Plaintext is shown once on creation
-  /// and never stored anywhere on the server.
+  /// SHA-256 hex digest of the plaintext key. Plaintext is shown once on
+  /// creation and never stored anywhere on the server. SHA-256 is sufficient
+  /// here because the plaintext is a high-entropy random token (≥256 bit), so
+  /// the password-stretching guarantees of argon2 add no value — but speed
+  /// matters because we hash on every authenticated API request.
   keyHash    String    @unique
   /// Scopes as JSON string array, e.g. ["licenses:write", "licenses:revoke"].
   scopes     Json      @default("[]")
@@ -154,7 +157,10 @@ model SigningKey {
 
 model Customer {
   id      String  @id @default(cuid())
-  email   String
+  /// Always stored lowercase-trimmed. UNIQUE so portal-login lookup is
+  /// deterministic and to prevent accidental double-creation. Service-layer
+  /// must normalize email before insert/update/lookup.
+  email   String  @unique
   name    String
   company String?
   notes   String?
@@ -176,7 +182,6 @@ model Customer {
   authTokens CustomerAuthToken[]
 
   @@unique([externalSource, externalRef], name: "externalRef_unique")
-  @@index([email])
   @@index([externalRef])
 }
 

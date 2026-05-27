@@ -9,6 +9,7 @@ import { normalizeLicenseKey } from '@/lib/license/license-key';
 import {
   applyBindings,
   incomingBindingSchema,
+  MAX_BINDINGS_PER_ACTIVATE,
 } from '@/lib/binding/activation-service';
 import { BindingPolicyViolationError } from '@/lib/binding/binding-policy';
 import { signLicenseToken } from '@/lib/token/token-service';
@@ -17,10 +18,13 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const activateRequestSchema = z.object({
-  licenseKey: z.string().min(1),
-  productSlug: z.string().min(1),
-  bindings: z.array(incomingBindingSchema).default([]),
+  licenseKey: z.string().min(1).max(64),
+  productSlug: z.string().min(1).max(128),
+  bindings: z.array(incomingBindingSchema).max(MAX_BINDINGS_PER_ACTIVATE).default([]),
 });
+
+/** Body-size cap to prevent oversized JSON payloads exhausting memory. */
+const MAX_BODY_BYTES = 32 * 1024; // 32 KiB
 
 function jsonError(status: number, code: string, message: string, details?: unknown) {
   return NextResponse.json({ error: { code, message, details } }, { status });
@@ -37,7 +41,11 @@ export async function POST(req: Request) {
 
   let body: unknown;
   try {
-    body = await req.json();
+    const rawText = await req.text();
+    if (rawText.length > MAX_BODY_BYTES) {
+      return jsonError(413, 'payload_too_large', `Request body exceeds ${MAX_BODY_BYTES} bytes`);
+    }
+    body = JSON.parse(rawText);
   } catch {
     return jsonError(400, 'invalid_json', 'Request body must be valid JSON');
   }
@@ -51,11 +59,16 @@ export async function POST(req: Request) {
     return jsonError(400, 'invalid_license_key', 'License key format / checksum invalid');
   }
 
-  const license: (License & { product: { slug: string; jwtLifetimeHours: number } | null }) | null =
-    await prisma.license.findUnique({
-      where: { licenseKey: canonicalKey },
-      include: { product: { select: { slug: true, jwtLifetimeHours: true } } },
-    });
+  const license:
+    | (License & {
+        product: { slug: string; jwtLifetimeHours: number; recheckIntervalHours: number } | null;
+      })
+    | null = await prisma.license.findUnique({
+    where: { licenseKey: canonicalKey },
+    include: {
+      product: { select: { slug: true, jwtLifetimeHours: true, recheckIntervalHours: true } },
+    },
+  });
 
   // Uniform "license not active" response — do not leak whether the key exists.
   if (!license || !license.product || license.product.slug !== parsed.data.productSlug) {
@@ -67,6 +80,22 @@ export async function POST(req: Request) {
     return jsonError(403, 'license_not_active', 'License is not active');
   }
   if (license.expiresAt && license.expiresAt.getTime() <= Date.now()) {
+    // Lazy-expire on read so the row state matches reality even without a job.
+    const flipped = await prisma.license.updateMany({
+      where: { id: license.id, status: LicenseStatus.active },
+      data: { status: LicenseStatus.expired },
+    });
+    if (flipped.count === 1) {
+      await writeAuditLog({
+        eventType: AuditEventType.LicenseExpired,
+        actorType: 'system',
+        actorId: null,
+        targetType: 'License',
+        targetId: license.id,
+        metadata: { reason: 'expiresAt-elapsed', source: 'activate' },
+        ip,
+      });
+    }
     return jsonError(403, 'license_not_active', 'License has expired');
   }
 
@@ -116,8 +145,6 @@ export async function POST(req: Request) {
   return NextResponse.json({
     token: signed.token,
     expiresAt: signed.expiresAt.toISOString(),
-    recheckIntervalHours: await prisma.product
-      .findUniqueOrThrow({ where: { id: license.productId }, select: { recheckIntervalHours: true } })
-      .then((p) => p.recheckIntervalHours),
+    recheckIntervalHours: license.product.recheckIntervalHours,
   });
 }

@@ -40,6 +40,10 @@ export const AuditEventType = {
   SigningKeyCreated: 'signing_key.created',
   SigningKeyRotated: 'signing_key.rotated',
   TokenVerifyFailed: 'token.verify_failed',
+
+  // Customer portal (self-service)
+  PortalPasswordSet: 'portal.password_set',
+  PortalPasswordReset: 'portal.password_reset',
 } as const;
 
 export type AuditEventType = (typeof AuditEventType)[keyof typeof AuditEventType];

@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
+import { SignJWT, jwtVerify, errors as joseErrors, type JWTPayload } from 'jose';
 import { randomUUID } from 'node:crypto';
 import type { KeyObject } from 'node:crypto';
 import { getEnv } from '../env';
@@ -134,13 +134,16 @@ export async function verifyLicenseToken(
     });
     return payload as LicenseTokenClaims;
   } catch (err) {
+    // Use jose's typed error classes — message-regex would silently mis-classify
+    // when jose changes its wording. `JWTExpired` is a sub-class of
+    // `JWTClaimValidationFailed`, so order the instanceof checks accordingly.
+    if (err instanceof joseErrors.JWTExpired) {
+      throw new TokenVerificationError(err.message, 'expired');
+    }
+    if (err instanceof joseErrors.JWTClaimValidationFailed && err.claim === 'aud') {
+      throw new TokenVerificationError(err.message, 'audience_mismatch');
+    }
     const message = err instanceof Error ? err.message : 'unknown';
-    if (/expired/i.test(message)) {
-      throw new TokenVerificationError(message, 'expired');
-    }
-    if (/audience/i.test(message)) {
-      throw new TokenVerificationError(message, 'audience_mismatch');
-    }
     throw new TokenVerificationError(message, 'invalid_signature');
   }
 }

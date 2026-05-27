@@ -191,6 +191,9 @@ export function createLicenseClient(config: LicenseClientConfig): LicenseClient 
       token: body.token,
       expiresAt: body.expiresAt,
       lastRecheckAt: new Date().toISOString(),
+      // Server is allowed to change recheckIntervalHours per-product over time;
+      // persist whatever it just told us so the next interval calculation uses it.
+      recheckIntervalHours: body.recheckIntervalHours,
     };
     await saveState(next);
     return next;

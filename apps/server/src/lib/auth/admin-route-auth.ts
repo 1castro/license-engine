@@ -4,7 +4,6 @@ import { authOptions } from './config';
 import {
   authenticateApiKey,
   extractApiKeyPlaintext,
-  type ApiKeyContext,
   type ApiKeyScope,
 } from './api-key-middleware';
 import { extractIp } from '../audit';
@@ -87,12 +86,3 @@ export function actorOf(ctx: AdminAuthContext): { actorType: 'admin' | 'api_key'
     : { actorType: 'api_key', actorId: ctx.subject.apiKeyId };
 }
 
-/** Wraps an `ApiKeyContext` (from older call sites) into the new `AdminAuthSubject` shape. */
-export function fromApiKey(ctx: ApiKeyContext): AdminAuthSubject {
-  return {
-    kind: 'api_key',
-    apiKeyId: ctx.apiKeyId,
-    apiKeyName: ctx.apiKeyName,
-    scopes: ctx.scopes,
-  };
-}

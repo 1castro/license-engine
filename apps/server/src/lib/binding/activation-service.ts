@@ -23,6 +23,9 @@ export const incomingBindingSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).default({}),
 });
 
+/** Max bindings accepted in a single activate-request body — prevents abuse. */
+export const MAX_BINDINGS_PER_ACTIVATE = 20;
+
 export type IncomingBinding = z.infer<typeof incomingBindingSchema>;
 
 export interface ActivationResult {
@@ -40,6 +43,16 @@ export interface ActivationResult {
  *      - check the per-type quota and insert a new row (status=active)
  *
  * Enforces required-binding-types from the license's BindingPolicy.
+ *
+ * The quota check + insert runs inside a single transaction with a pessimistic
+ * row-lock on the License (`SELECT ... FOR UPDATE`). Without the lock, two
+ * concurrent activates against the same license could both observe `count < max`
+ * and both create a row, exceeding the binding policy's quota. With the lock,
+ * the second transaction blocks until the first commits, so its count reflects
+ * the new state.
+ *
+ * Audit-log writes happen outside the transaction — audit-log persistence is
+ * best-effort and must never roll back a successful activation.
  */
 export async function applyBindings(
   license: Pick<License, 'id' | 'bindingPolicy'>,
@@ -52,71 +65,81 @@ export async function applyBindings(
     incoming.map((b) => b.type),
   );
 
-  const activations: Activation[] = [];
-  let newlyCreated = 0;
+  const { activations, newlyCreatedIds } = await prisma.$transaction(async (tx) => {
+    // Pessimistic lock on the License row — serializes concurrent activates
+    // for the same license so quota checks can't race with inserts.
+    await tx.$queryRaw`SELECT id FROM "License" WHERE id = ${license.id} FOR UPDATE`;
 
-  for (const b of incoming) {
-    const hash = hashBindingValue(b.type, b.value);
-    const metadata = enrichMetadataWithDisplayName(b);
+    const activations: Activation[] = [];
+    const newlyCreatedIds: { id: string; bindingType: BindingType }[] = [];
 
-    const existing = await prisma.activation.findUnique({
-      where: {
-        binding_unique: { licenseId: license.id, bindingType: b.type, bindingValueHash: hash },
-      },
-    });
+    for (const b of incoming) {
+      const hash = hashBindingValue(b.type, b.value);
+      const metadata = enrichMetadataWithDisplayName(b);
 
-    if (existing) {
-      const refreshed = await prisma.activation.update({
-        where: { id: existing.id },
-        data: {
-          lastSeenAt: new Date(),
-          status: ActivationStatus.active,
-          releasedAt: null,
-          bindingValueMetadata: metadata as Prisma.InputJsonValue,
+      const existing = await tx.activation.findUnique({
+        where: {
+          binding_unique: { licenseId: license.id, bindingType: b.type, bindingValueHash: hash },
         },
       });
-      activations.push(refreshed);
-      continue;
-    }
 
-    const max = maxActivationsFor(policy, b.type);
-    if (max !== null) {
-      const currentActive = await prisma.activation.count({
-        where: { licenseId: license.id, bindingType: b.type, status: ActivationStatus.active },
-      });
-      if (currentActive >= max) {
-        throw new BindingPolicyViolationError(
-          'max_exceeded',
-          b.type,
-          `already ${currentActive} of ${max} active`,
-        );
+      if (existing) {
+        const refreshed = await tx.activation.update({
+          where: { id: existing.id },
+          data: {
+            lastSeenAt: new Date(),
+            status: ActivationStatus.active,
+            releasedAt: null,
+            bindingValueMetadata: metadata as Prisma.InputJsonValue,
+          },
+        });
+        activations.push(refreshed);
+        continue;
       }
+
+      const max = maxActivationsFor(policy, b.type);
+      if (max !== null) {
+        const currentActive = await tx.activation.count({
+          where: { licenseId: license.id, bindingType: b.type, status: ActivationStatus.active },
+        });
+        if (currentActive >= max) {
+          throw new BindingPolicyViolationError(
+            'max_exceeded',
+            b.type,
+            `already ${currentActive} of ${max} active`,
+          );
+        }
+      }
+
+      const created = await tx.activation.create({
+        data: {
+          licenseId: license.id,
+          bindingType: b.type,
+          bindingValueHash: hash,
+          bindingValueMetadata: metadata as Prisma.InputJsonValue,
+          status: ActivationStatus.active,
+        },
+      });
+      activations.push(created);
+      newlyCreatedIds.push({ id: created.id, bindingType: b.type });
     }
 
-    const created = await prisma.activation.create({
-      data: {
-        licenseId: license.id,
-        bindingType: b.type,
-        bindingValueHash: hash,
-        bindingValueMetadata: metadata as Prisma.InputJsonValue,
-        status: ActivationStatus.active,
-      },
-    });
-    activations.push(created);
-    newlyCreated += 1;
+    return { activations, newlyCreatedIds };
+  });
 
+  for (const a of newlyCreatedIds) {
     await writeAuditLog({
       eventType: AuditEventType.ActivationCreated,
       actorType: 'anonymous',
       actorId: null,
       targetType: 'Activation',
-      targetId: created.id,
-      metadata: { licenseId: license.id, bindingType: b.type },
+      targetId: a.id,
+      metadata: { licenseId: license.id, bindingType: a.bindingType },
       ip: ipForAudit,
     });
   }
 
-  return { activations, newlyCreated };
+  return { activations, newlyCreated: newlyCreatedIds.length };
 }
 
 /**

@@ -14,11 +14,13 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const deactivateRequestSchema = z.object({
-  token: z.string().min(1),
-  productSlug: z.string().min(1),
+  token: z.string().min(1).max(8192),
+  productSlug: z.string().min(1).max(128),
   bindingType: z.nativeEnum(BindingType),
-  bindingValue: z.string().min(1),
+  bindingValue: z.string().min(1).max(512),
 });
+
+const MAX_BODY_BYTES = 32 * 1024;
 
 function jsonError(status: number, code: string, message: string, details?: unknown) {
   return NextResponse.json({ error: { code, message, details } }, { status });
@@ -33,7 +35,11 @@ export async function POST(req: Request) {
 
   let body: unknown;
   try {
-    body = await req.json();
+    const rawText = await req.text();
+    if (rawText.length > MAX_BODY_BYTES) {
+      return jsonError(413, 'payload_too_large', `Request body exceeds ${MAX_BODY_BYTES} bytes`);
+    }
+    body = JSON.parse(rawText);
   } catch {
     return jsonError(400, 'invalid_json', 'Request body must be valid JSON');
   }

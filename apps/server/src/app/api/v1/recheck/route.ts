@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { LicenseStatus, type License } from '@prisma/client';
+import { ActivationStatus, LicenseStatus, type License } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { extractIp, hashIp, writeAuditLog, AuditEventType } from '@/lib/audit';
 import { recheckLimiter } from '@/lib/auth/rate-limit';
@@ -14,9 +14,11 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const recheckRequestSchema = z.object({
-  token: z.string().min(1),
-  productSlug: z.string().min(1),
+  token: z.string().min(1).max(8192),
+  productSlug: z.string().min(1).max(128),
 });
+
+const MAX_BODY_BYTES = 32 * 1024;
 
 function jsonError(status: number, code: string, message: string, details?: unknown) {
   return NextResponse.json({ error: { code, message, details } }, { status });
@@ -32,7 +34,11 @@ export async function POST(req: Request) {
 
   let body: unknown;
   try {
-    body = await req.json();
+    const rawText = await req.text();
+    if (rawText.length > MAX_BODY_BYTES) {
+      return jsonError(413, 'payload_too_large', `Request body exceeds ${MAX_BODY_BYTES} bytes`);
+    }
+    body = JSON.parse(rawText);
   } catch {
     return jsonError(400, 'invalid_json', 'Request body must be valid JSON');
   }
@@ -44,7 +50,7 @@ export async function POST(req: Request) {
   // Look up the product first so we know which key-chain to verify against.
   const product = await prisma.product.findUnique({
     where: { slug: parsed.data.productSlug },
-    select: { id: true, slug: true, jwtLifetimeHours: true },
+    select: { id: true, slug: true, jwtLifetimeHours: true, recheckIntervalHours: true },
   });
   if (!product) {
     return jsonError(404, 'unknown_product', 'Unknown product slug');
@@ -90,12 +96,58 @@ export async function POST(req: Request) {
     return NextResponse.json({ status: 'expired' });
   }
   if (license.expiresAt && license.expiresAt.getTime() <= Date.now()) {
+    // Lazy-expire: flip the DB row and write a single LicenseExpired audit entry
+    // so the dashboard reflects reality even if no background job ran. Idempotent
+    // because we only update when status is still 'active' — concurrent rechecks
+    // race the updateMany, but only one wins and writes the audit log.
+    const flipped = await prisma.license.updateMany({
+      where: { id: license.id, status: LicenseStatus.active },
+      data: { status: LicenseStatus.expired },
+    });
+    if (flipped.count === 1) {
+      await writeAuditLog({
+        eventType: AuditEventType.LicenseExpired,
+        actorType: 'system',
+        actorId: null,
+        targetType: 'License',
+        targetId: license.id,
+        metadata: { reason: 'expiresAt-elapsed', source: 'recheck' },
+        ip,
+      });
+    }
     return NextResponse.json({ status: 'expired' });
   }
 
   const featureFlags = Array.isArray(license.featureFlags)
     ? (license.featureFlags as unknown[]).filter((v): v is string => typeof v === 'string')
     : [];
+
+  // Filter bindings: drop any whose Activation has been released since the
+  // previous token was issued. A device that was deactivated must not silently
+  // regain access via recheck — its binding stops being part of the token.
+  const tokenBindings: Array<{ type: string; hash: string }> = Array.isArray(claims.bindings)
+    ? (claims.bindings as Array<{ type: string; hash: string }>).filter(
+        (b): b is { type: string; hash: string } =>
+          typeof b?.type === 'string' && typeof b?.hash === 'string',
+      )
+    : [];
+
+  let activeBindings: Array<{ type: string; hash: string }> = [];
+  if (tokenBindings.length > 0) {
+    const activeRows = await prisma.activation.findMany({
+      where: {
+        licenseId: license.id,
+        status: ActivationStatus.active,
+        OR: tokenBindings.map((b) => ({
+          bindingType: b.type as never,
+          bindingValueHash: b.hash,
+        })),
+      },
+      select: { bindingType: true, bindingValueHash: true },
+    });
+    const stillActive = new Set(activeRows.map((r) => `${r.bindingType}|${r.bindingValueHash}`));
+    activeBindings = tokenBindings.filter((b) => stillActive.has(`${b.type}|${b.hash}`));
+  }
 
   const signed = await signLicenseToken({
     license: {
@@ -105,15 +157,13 @@ export async function POST(req: Request) {
       featureFlags,
     },
     product: { slug: product.slug, jwtLifetimeHours: product.jwtLifetimeHours },
-    // Carry forward the bindings from the previous token verbatim.
-    bindings: Array.isArray(claims.bindings)
-      ? (claims.bindings as Array<{ type: string; hash: string }>).map((b) => ({ type: b.type as never, hash: b.hash }))
-      : [],
+    bindings: activeBindings.map((b) => ({ type: b.type as never, hash: b.hash })),
   });
 
   return NextResponse.json({
     status: 'active',
     token: signed.token,
     expiresAt: signed.expiresAt.toISOString(),
+    recheckIntervalHours: product.recheckIntervalHours,
   });
 }
