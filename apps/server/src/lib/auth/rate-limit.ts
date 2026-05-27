@@ -71,3 +71,12 @@ export const recheckLimiter = createInMemoryRateLimiter({
   capacity: 60,
   refillTokensPerMinute: 60,
 });
+
+/**
+ * Portal forgot-password requests: 3/min/email. Tight to prevent reset-mail
+ * spamming a victim's inbox.
+ */
+export const portalForgotLimiter = createInMemoryRateLimiter({
+  capacity: 3,
+  refillTokensPerMinute: 3,
+});

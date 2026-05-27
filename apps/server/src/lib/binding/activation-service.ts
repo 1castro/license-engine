@@ -57,6 +57,7 @@ export async function applyBindings(
 
   for (const b of incoming) {
     const hash = hashBindingValue(b.type, b.value);
+    const metadata = enrichMetadataWithDisplayName(b);
 
     const existing = await prisma.activation.findUnique({
       where: {
@@ -71,7 +72,7 @@ export async function applyBindings(
           lastSeenAt: new Date(),
           status: ActivationStatus.active,
           releasedAt: null,
-          bindingValueMetadata: b.metadata as Prisma.InputJsonValue,
+          bindingValueMetadata: metadata as Prisma.InputJsonValue,
         },
       });
       activations.push(refreshed);
@@ -97,7 +98,7 @@ export async function applyBindings(
         licenseId: license.id,
         bindingType: b.type,
         bindingValueHash: hash,
-        bindingValueMetadata: b.metadata as Prisma.InputJsonValue,
+        bindingValueMetadata: metadata as Prisma.InputJsonValue,
         status: ActivationStatus.active,
       },
     });
@@ -153,4 +154,30 @@ export async function releaseActivation(
   });
 
   return { released: true };
+}
+
+/**
+ * Server-side metadata fallback: if the caller (SDK / direct API user) did
+ * not include a displayName, derive one from the binding type + raw value
+ * where it's safe to do so (no PII implications).
+ *
+ *   domain         → the raw domain name (not personal data)
+ *   installation   → "Installation <first-8-chars>" (the value is a UUID anyway)
+ *   device/account → leave as caller-provided (the raw value may identify a person)
+ *
+ * The raw binding value is otherwise discarded after hashing — we never store
+ * the raw value for any binding type.
+ */
+function enrichMetadataWithDisplayName(b: IncomingBinding): Record<string, unknown> {
+  const metadata = { ...(b.metadata ?? {}) } as Record<string, unknown>;
+  if (typeof metadata.displayName === 'string' && metadata.displayName.length > 0) {
+    return metadata;
+  }
+  if (b.type === 'domain') {
+    metadata.displayName = b.value;
+  } else if (b.type === 'installation') {
+    metadata.displayName = `Installation ${b.value.slice(0, 8)}`;
+  }
+  // device / account: no automatic displayName — caller decides what's safe to show.
+  return metadata;
 }

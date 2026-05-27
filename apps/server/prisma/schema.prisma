@@ -162,13 +162,43 @@ model Customer {
   externalRef    String?
   externalSource ExternalSource @default(manual)
 
+  /// Phase-6 self-service portal: argon2id password hash. Null until the
+  /// customer completes the initial-setup flow via emailed token.
+  passwordHash      String?
+  /// When the customer first proved control of the email (initial-password set).
+  emailVerifiedAt   DateTime?
+  /// Bookkeeping for the portal session: last successful login.
+  portalLastLoginAt DateTime?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   licenses  License[]
+  authTokens CustomerAuthToken[]
 
   @@unique([externalSource, externalRef], name: "externalRef_unique")
   @@index([email])
   @@index([externalRef])
+}
+
+enum CustomerAuthTokenPurpose {
+  set_initial_password
+  reset_password
+}
+
+model CustomerAuthToken {
+  id         String                   @id @default(cuid())
+  customerId String
+  customer   Customer                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// SHA-256 hex digest of the raw token. Raw token only ever lives in the
+  /// emailed link — server never stores plaintext.
+  tokenHash  String                   @unique
+  purpose    CustomerAuthTokenPurpose
+  createdAt  DateTime                 @default(now())
+  expiresAt  DateTime
+  usedAt     DateTime?
+
+  @@index([customerId, purpose])
+  @@index([expiresAt])
 }
 
 model License {

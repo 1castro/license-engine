@@ -225,9 +225,43 @@ Detaillierte Phasen- und Task-Planung. Tasks werden während der Umsetzung verfe
 
 ## Phase 6 — Self-Service-Portal
 
-**Status:** geplant — spätere Iteration, kein Sprintziel der Erst-Implementierung
+**Status:** done (2026-05-27).
 
-Voraussichtlicher Scope:
+**Was steht:**
+- **Datenmodell-Erweiterung:** `Customer.passwordHash` + `emailVerifiedAt` + `portalLastLoginAt`. Neue Tabelle `CustomerAuthToken` mit `purpose` enum (`set_initial_password` / `reset_password`), Hash-only Storage (SHA-256), TTL pro Purpose (72h Setup, 2h Reset), Auto-Invalidation alter Tokens beim Issue. Migration `20260527120000_phase6_portal_auth`.
+- **MailSender:** Interface + `ConsoleMailSender` (logt Mail-Inhalt im pino-Log). Tag-2-Stub; SMTP-Adapter gegen tropicsoft-mailcow ist ein eigener kleiner Folgeschritt.
+- **Templates:** `buildSetupPasswordMail` + `buildResetPasswordMail`, beide deutsch.
+- **Portal-Auth-Service:** `sendSetupMail`, `sendResetMail` (Enumeration-Defense: Antwort immer gleich), `setInitialPassword`, `resetPassword`, `loginCustomer` (Argon2-Dummy für unbekannte Email).
+- **JWT-Cookie `le_portal_session`:** HS256 mit `NEXTAUTH_SECRET`, 30d Lifetime, HttpOnly + Secure (prod) + SameSite=Lax.
+- **Portal-API unter `/api/portal/v1/`:** `POST login` / `logout` / `forgot-password` (rate-limit 3/min/(email,IP)) / `setup-password` / `reset-password` / `activations/[id]/release`.
+- **Portal-UI** unter `/portal/*` (getrennt vom Admin, keine `next-intl`):
+  - `/portal/login`, `/portal/forgot`, `/portal/setup?token=…`, `/portal/reset?token=…`
+  - `/portal` — Dashboard mit Lizenz-Liste, Status-Badges, Logout.
+  - `/portal/licenses/[id]` — Detail mit Status/Typ/Expiry/Features + Aktivierungs-Liste.
+- **Hook in `createCustomer`:** beim Anlegen `sendSetupMail` fire-and-forget.
+- **Middleware-Fix:** `/portal/*` skippt `next-intl` komplett.
+- **Inline-Modale statt native `confirm()`:** Release-Button im Portal nutzt shadcn-Dialog. Pattern als Feedback-Memory verbindlich gemacht.
+- **Display-Name für Aktivierungen:** SDK setzt `metadata.displayName` automatisch (Browser: `domain`, Node: `<hostname> (PID …)`). Server-Fallback in `applyBindings` setzt für `domain` und `installation` einen Display-Namen aus dem rohen Value. Portal zeigt `Domain — Jans Laptop (Dev)` + Subtitle, Hash nur noch klein-grau.
+
+**Verifikation:**
+- typecheck / lint / build grün, **92 Tests grün** (87 Server inkl. 2 neue Phase-6-Tests = portal-session 3, auth-token 4 + 5 SDK).
+- Browser-E2E:
+  1. Admin legt Customer „Maria Tester Portal" an → Setup-Mail im pino-Log mit Link.
+  2. `/portal/setup?token=…` → Passwort gesetzt, Token konsumiert.
+  3. `/portal/login` → Cookie + Redirect ins Dashboard.
+  4. Per SQL Phase-3-Lizenz auf Maria umgehängt → Lizenz erscheint im Portal.
+  5. License-Detail zeigt 3 Aktivierungen.
+  6. Klick „Freigeben" → Modal (kein native confirm) → Activation released, AuditLog-Event mit `actorType=system, actorId=<customerId>, metadata.releasedBy=portal`.
+  7. Neue Aktivierung mit `displayName: "Jans Laptop (Dev)"` → Portal zeigt sprechenden Namen, Hash nur klein.
+- DB-Check: `Customer.passwordHash` gesetzt, `emailVerifiedAt`/`portalLastLoginAt` populiert, Auth-Token mit `usedAt`.
+
+**Offen / bewusst nicht in Phase 6:**
+- SMTP-Adapter (Drop-in für `ConsoleMailSender`) — folgt mit dem konkreten mailcow-Setup.
+- React-Bindings für SDK — vertagt bis erste echte React-App das SDK clientseitig nutzt.
+- Backfill `displayName` für Pre-Phase-6-Aktivierungen — bei Bedarf einmaliges Skript.
+- Dockerfile-`runtime`-Target weiterhin nicht End-to-End-gebaut.
+
+**Voraussichtlicher Scope (war Phase-6-Plan):**
 - Kunden-Login (eigener Auth-Pfad, getrennt vom Admin)
 - Lizenz-Übersicht pro Kunde
 - Aktivierungen anzeigen, Geräte-Wechsel (Aktivierung freigeben)

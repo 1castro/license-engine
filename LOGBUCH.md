@@ -4,6 +4,60 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-05-27 — Phase 6 Self-Service-Portal komplett
+
+### Bündel A — Schema-Erweiterung
+- `Customer` um `passwordHash`, `emailVerifiedAt`, `portalLastLoginAt` erweitert (alle nullable, kein Bruch der bestehenden Records).
+- Neue Tabelle `CustomerAuthToken` mit purpose-enum (`set_initial_password` / `reset_password`), Hash-only-Storage, TTL 72h (Setup) bzw. 2h (Reset). Migration `20260527120000_phase6_portal_auth`.
+
+### Bündel B — Mail-Versand
+- `MailSender`-Interface + `ConsoleMailSender` als Tag-2-Stub (Mail-Inhalt im pino-Log auf INFO).
+- `buildSetupPasswordMail` + `buildResetPasswordMail` (deutsch).
+- SMTP-Adapter gegen tropicsoft-mailcow ist ein eigener kleiner Folgeschritt.
+
+### Bündel C — Portal-Auth-Service
+- `auth-token.ts`: `issueAuthToken` (mit Auto-Invalidation alter Tokens derselben purpose) + `consumeAuthToken` mit typed `AuthTokenInvalidError`.
+- `session.ts`: JWT-Cookie `le_portal_session` (HS256 mit NEXTAUTH_SECRET, 30d, HttpOnly+Secure-in-prod+SameSite=Lax).
+- `auth-service.ts`: `sendSetupMail`, `sendResetMail` (mit Enumeration-Defense — Antwort immer gleich), `setInitialPassword`, `resetPassword`, `loginCustomer` (Argon2-Dummy für unbekannte Email = Konstant-Zeit-Verify).
+
+### Bündel D+E — Portal-API + Pages + Hook
+- API: `POST /api/portal/v1/{login, logout, forgot-password, setup-password, reset-password, activations/[id]/release}`.
+- Login nutzt existierenden `loginLimiter` + `loginBackoff` mit `portal:`-prefixiertem Key (saubere Domain-Trennung gegen Admin-Login).
+- `portalForgotLimiter` neu (3/min pro (email, IP-Hash)).
+- Pages unter `/portal/*`: `/portal/login`, `/portal/forgot`, `/portal/setup?token=…`, `/portal/reset?token=…`, `/portal` (Dashboard), `/portal/licenses/[id]`. Eigenes `app/portal/layout.tsx` ohne next-intl-Wrapping, eigene html/body.
+- Hook in `createCustomer`: fire-and-forget `sendSetupMail` mit Catch-Log.
+
+### Middleware-Fix
+- `/portal/*` skippt `next-intl` komplett (sonst 404 wegen Locale-Prefix-Mismatch in Routing).
+
+### User-Feedback: native `confirm()` raus
+- Release-Button im Portal nutzt jetzt shadcn-`Dialog` statt `window.confirm()`. Feedback-Memory `feedback_no_native_browser_confirm.md` projektübergreifend angelegt.
+- grep durch SDK + Server: keine weiteren Vorkommen von `confirm(`/`alert(`/`prompt(`.
+
+### User-Feedback: Display-Name für Aktivierungen
+- SDK ergänzt automatisch `metadata.displayName`:
+  - `node`: `<hostname> (PID <pid>)`
+  - `browser`: `<domain>` + `userAgent` als Subtitle.
+- Server-Side `enrichMetadataWithDisplayName` in `applyBindings` setzt Fallback für `domain` (= raw value) und `installation` (= „Installation <prefix>"). Für `device`/`account` kein Auto-Display (potentielles PII — Caller entscheidet).
+- Portal-Detail-Page zeigt jetzt `Domain — Jans Laptop (Dev)` als Header + `node · userAgent` als Subtitle, Hash nur noch klein-grau.
+
+### Bündel F — Verifikation
+- 92 Tests grün (87 Server inkl. 2 neue Phase-6 = portal-session 3, auth-token 4 + 5 SDK).
+- Browser-E2E mit Chrome DevTools:
+  1. Admin legt Customer „Maria Tester Portal" an → Setup-Mail im pino-Log.
+  2. `/portal/setup?token=…` → Passwort gesetzt (Test-Passwort lokal, nicht im LOGBUCH).
+  3. `/portal/login` → Cookie + Dashboard. Anfangs leer (Maria neu).
+  4. SQL: Phase-3-Lizenz `TR0P-Y1C7-…-CHS0` Maria zugeordnet → Lizenz erscheint im Portal.
+  5. License-Detail mit 3 Aktivierungen sichtbar (1 active, 2 released).
+  6. Klick „Freigeben" → erst native `confirm()` (Bug!) → Modal-Fix → erneuter Klick → Inline-Dialog → Confirm → released. AuditLog: `activation.released` mit `actorType=system, actorId=<customerId>, metadata.releasedBy=portal`.
+  7. Neue Aktivierung via curl mit `displayName: "Jans Laptop (Dev)"` → Reload Portal → zeigt sprechenden Namen.
+
+### Nächster Schritt
+- Phase-6-Bundle committen + pushen.
+- Roadmap-Lücke füllen: SMTP-Adapter wenn Jan mit dem mailcow-Account fertig ist. React-Bindings + KEK-Rotation-Skript bleiben Backlog.
+
+---
+
 ## 2026-05-27 — Phase 5 Audit + Härtung komplett
 
 ### Bündel A — Audit-Log-Viewer

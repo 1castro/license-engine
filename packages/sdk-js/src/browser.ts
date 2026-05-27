@@ -26,8 +26,22 @@ export function createBrowserLicenseClient(options: BrowserClientOptions): Licen
   const storage = options.storage ?? createIndexedDbStorage();
   const domain =
     options.domainOverride ?? (typeof location !== 'undefined' ? location.hostname : 'unknown');
+  const userAgent =
+    typeof navigator !== 'undefined' && typeof navigator.userAgent === 'string'
+      ? navigator.userAgent
+      : 'unknown';
   const bindings: BindingInput[] = [
-    { type: 'domain', value: domain, metadata: { runtime: 'browser' } },
+    {
+      type: 'domain',
+      value: domain,
+      metadata: {
+        runtime: 'browser',
+        userAgent,
+        // displayName is shown in the customer portal next to the activation.
+        // For domain bindings the value itself is the most useful label.
+        displayName: domain,
+      },
+    },
     ...(options.extraBindings ?? []),
   ];
 

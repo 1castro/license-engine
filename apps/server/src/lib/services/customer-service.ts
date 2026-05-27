@@ -2,6 +2,8 @@ import { ExternalSource, Prisma, type Customer } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../prisma';
 import { writeAuditLog, AuditEventType } from '../audit';
+import { sendSetupMail } from '../portal/auth-service';
+import { getLogger } from '../logger';
 import type { AdminAuthContext } from '../auth/admin-route-auth';
 import { actorOf } from '../auth/admin-route-auth';
 
@@ -75,6 +77,20 @@ export async function createCustomer(
     metadata: { email: customer.email, name: customer.name },
     ip: ctx.ip,
   });
+
+  // Fire-and-forget portal-setup mail. Failure here must NOT roll back the
+  // customer creation — admin can resend the mail later via the UI.
+  sendSetupMail(customer).catch((err: unknown) => {
+    getLogger().warn(
+      {
+        event: 'portal.setup_mail_failed',
+        customerId: customer.id,
+        err: err instanceof Error ? err.message : 'unknown',
+      },
+      'Failed to send initial portal setup mail',
+    );
+  });
+
   return { customer, created: true };
 }
 

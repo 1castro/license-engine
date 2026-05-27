@@ -10,6 +10,13 @@ const PROTECTED_PREFIXES = ['/admin'];
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Portal routes have their own layout and their own session cookie; they
+  // do NOT use next-intl. Skip the i18n middleware entirely so they don't
+  // get prefixed with /de or /en.
+  if (pathname === '/portal' || pathname.startsWith('/portal/')) {
+    return NextResponse.next();
+  }
+
   // Strip the locale prefix so route-matching is locale-agnostic.
   const pathWithoutLocale = pathname.replace(/^\/(de|en)(?=\/|$)/, '') || '/';
 

@@ -7,6 +7,24 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Added — Phase 6 Self-Service-Portal
+- `Customer`-Schema erweitert um `passwordHash`, `emailVerifiedAt`, `portalLastLoginAt`. Neue Tabelle `CustomerAuthToken` (Hash-only, TTL pro Purpose, Auto-Invalidation alter Tokens). Migration `20260527120000_phase6_portal_auth`.
+- `MailSender`-Abstraktion mit `ConsoleMailSender` (Mail-Inhalt im pino-Log) — SMTP-Adapter als Drop-in für später.
+- Portal-Auth-Service: `sendSetupMail`, `sendResetMail` (mit Enumeration-Defense), `setInitialPassword`, `resetPassword`, `loginCustomer` (Argon2-Dummy für unbekannte Email).
+- JWT-Cookie `le_portal_session` (HS256, 30d, HttpOnly+Secure+SameSite=Lax) als getrennter Auth-Pfad neben dem Admin-NextAuth-Cookie.
+- Portal-API unter `/api/portal/v1/{login,logout,forgot-password,setup-password,reset-password,activations/[id]/release}`.
+- Portal-UI unter `/portal/*` (eigenes Layout ohne next-intl): Login / Forgot / Setup / Reset / Dashboard (Lizenz-Liste) / License-Detail (mit Aktivierungs-Release).
+- Auto-Hook in `createCustomer`: bei Anlegen wird Setup-Mail fire-and-forget versendet.
+- `portalForgotLimiter` (3/min pro (email,IP-Hash)) zur Mail-Spam-Defense.
+- 2 neue Unit-Tests: `portal-session.test.ts` (JWT-Roundtrip + Tampering) + `auth-token.test.ts` (Hash-Determinismus + No-Leakage).
+
+### Fixed
+- Middleware: `/portal/*` skippt next-intl, sonst 404 wegen Locale-Prefix-Mismatch.
+- Release-Button im Portal nutzt jetzt Inline-Modal-Dialog statt native `window.confirm()`. Pattern projektübergreifend verbindlich gemacht (Feedback-Memory `feedback_no_native_browser_confirm.md`).
+
+### Changed
+- Portal-Aktivierungen zeigen sprechenden `displayName` aus `bindingValueMetadata` (Domain-Name / `Installation <prefix>` / Caller-Wert), Hash nur noch klein-grau als Beweis. SDK setzt `displayName` automatisch (Browser: `domain`, Node: `<hostname> (PID …)`). Server-Side Fallback in `applyBindings` füllt für `domain` + `installation`, lässt `device`/`account` dem Caller (PII-Schutz).
+
 ### Added — Phase 5 Audit + Härtung
 - Audit-Log-Service (`src/lib/services/audit-log-service.ts`) + `/api/admin/v1/audit-logs` Route mit Filter (eventType, actorType, actorId, targetType, targetId, from, until) und Offset-Pagination. Scope `audit:read`.
 - Admin-UI `/admin/audit-log`: RSC-Tabelle mit Zeitpunkt/Event/Actor/Target/IP-Hash/Metadata, Client-Filter-Form (2x4-Grid + Footer-Buttons), Client-Pagination. Sidebar-Item aktiviert. i18n unter `auditLog.*`.

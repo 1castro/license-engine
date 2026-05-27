@@ -35,8 +35,28 @@ export async function createNodeLicenseClient(options: NodeClientOptions): Promi
   const storage =
     options.storage ?? createFileSystemStorage({ productSlug: options.productSlug });
   const installationId = await getOrCreateInstallationId(storage);
+  const hostname = (() => {
+    try {
+      // Lazy require so the import is only paid in Node.
+
+      return require('node:os').hostname() as string;
+    } catch {
+      return 'unknown-host';
+    }
+  })();
   const bindings: BindingInput[] = [
-    { type: 'installation', value: installationId, metadata: { runtime: 'node', pid: process.pid } },
+    {
+      type: 'installation',
+      value: installationId,
+      metadata: {
+        runtime: 'node',
+        pid: process.pid,
+        // displayName: human-readable identifier shown in the customer
+        // portal next to the activation. Installation-IDs are opaque UUIDs
+        // anyway, so revealing them is no PII risk.
+        displayName: `${hostname} (PID ${process.pid})`,
+      },
+    },
     ...(options.extraBindings ?? []),
   ];
 
