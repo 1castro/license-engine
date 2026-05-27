@@ -8,6 +8,7 @@ import { getEnv } from '../env';
 import { verifyPassword } from './password';
 import { verifyTotp } from './totp';
 import { loginLimiter } from './rate-limit';
+import { loginBackoff } from './login-backoff';
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -38,8 +39,19 @@ export const authOptions: NextAuthOptions = {
         }
         const { email, password, totp } = parsed.data;
         const limiterKey = email.toLowerCase();
+
+        // Burst-rate-limit is the first gate (5/min). Progressive backoff is the
+        // second gate that escalates the wait after consecutive failed logins.
         if (!loginLimiter.tryConsume(limiterKey)) {
           log.warn({ event: 'admin.login.ratelimited', email }, 'Login rate-limited');
+          return null;
+        }
+        const backoffRemainingMs = loginBackoff.check(limiterKey);
+        if (backoffRemainingMs !== null) {
+          log.warn(
+            { event: 'admin.login.backoff_active', email, backoffRemainingMs },
+            'Login blocked by progressive backoff',
+          );
           return null;
         }
 
@@ -48,12 +60,14 @@ export const authOptions: NextAuthOptions = {
         if (!user) {
           // Still hash a dummy to keep timing roughly constant.
           await verifyPassword(password, '$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAA$AAAAAAAAAAAA');
+          loginBackoff.recordFailure(limiterKey);
           log.warn({ event: 'admin.login.unknown_email' }, 'Login with unknown email');
           return null;
         }
 
         const passwordOk = await verifyPassword(password, user.passwordHash);
         if (!passwordOk) {
+          loginBackoff.recordFailure(limiterKey);
           log.warn({ event: 'admin.login.bad_password', userId: user.id }, 'Bad password');
           return null;
         }
@@ -64,6 +78,7 @@ export const authOptions: NextAuthOptions = {
           lastUsedStep: user.totpLastUsedStep,
         });
         if (!totpResult.valid || totpResult.usedStep === undefined) {
+          loginBackoff.recordFailure(limiterKey);
           log.warn({ event: 'admin.login.bad_totp', userId: user.id }, 'Bad / replayed TOTP');
           return null;
         }
@@ -75,6 +90,7 @@ export const authOptions: NextAuthOptions = {
             lastLoginAt: new Date(),
           },
         });
+        loginBackoff.recordSuccess(limiterKey);
 
         log.info({ event: 'admin.login.success', userId: user.id }, 'Admin login');
         return {

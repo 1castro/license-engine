@@ -73,7 +73,13 @@
     "deleteConfirm": "Produkt „{name}\" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
     "deleteInUse": "Dieses Produkt kann nicht gelöscht werden — es referenziert noch {count} Lizenz(en).",
     "revocationRecheck": "Recheck (Standard)",
-    "revocationRefresh": "Refresh-Token"
+    "revocationRefresh": "Refresh-Token",
+    "signingKey": "Signing-Key",
+    "signingKeyHint": "Aktiver Ed25519-Key zum Signieren von Lizenz-Tokens. Bei Rotation bleibt der alte Key für Verifikation bestehen (Grace).",
+    "rotateKey": "Key rotieren",
+    "rotateKeyConfirm": "Soll ein neuer Signing-Key für „{name}\" erzeugt werden? Der bisherige Key bleibt für die Verifikation bereits ausgestellter Tokens erhalten.",
+    "rotateKeySuccess": "Neuer Signing-Key erzeugt: {kid}",
+    "rotateKeyFailed": "Rotation fehlgeschlagen: {error}"
   },
   "customers": {
     "title": "Kunden",
@@ -151,6 +157,31 @@
     "revokeTitle": "API-Key widerrufen",
     "revokeConfirm": "API-Key „{name}\" wirklich widerrufen? Damit verlieren alle Aufrufer sofort den Zugriff.",
     "errorAlreadyRevoked": "Dieser API-Key ist bereits widerrufen."
+  },
+  "auditLog": {
+    "title": "Audit-Log",
+    "subtitle": "Sicherheitsrelevante Ereignisse, neueste zuerst",
+    "empty": "Noch keine Einträge.",
+    "timestamp": "Zeitpunkt",
+    "event": "Ereignis",
+    "actor": "Akteur",
+    "target": "Ziel",
+    "ipHash": "IP-Hash",
+    "metadata": "Metadaten",
+    "filterEventType": "Ereignis-Typ",
+    "filterActorType": "Akteur-Typ",
+    "filterFrom": "Von",
+    "filterUntil": "Bis",
+    "filterAll": "Alle",
+    "actorAdmin": "Admin",
+    "actorApiKey": "API-Key",
+    "actorSystem": "System",
+    "actorAnonymous": "Anonym",
+    "apply": "Filter anwenden",
+    "reset": "Zurücksetzen",
+    "previous": "Zurück",
+    "next": "Weiter",
+    "showingRange": "Einträge {from}–{to} von {total}"
   },
   "errors": {
     "validation": "Eingabe ungültig.",

@@ -6,6 +6,7 @@ import { Link, redirect } from '@/i18n/navigation';
 import { getProduct } from '@/lib/services/product-service';
 
 import { ProductForm } from '../../_components/product-form';
+import { RotateKeyButton } from '../../_components/rotate-key-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,6 +57,25 @@ export default async function EditProductPage({
           featureCatalog,
         }}
       />
+
+      <div className="rounded-md border bg-card p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          {t('signingKey')}
+        </h2>
+        <p className="mt-2 text-sm text-muted-foreground">{t('signingKeyHint')}</p>
+        {product.activeSigningKeyId && (
+          <p className="mt-3 font-mono text-xs">
+            kid: <span className="text-foreground">{product.activeSigningKeyId}</span>
+          </p>
+        )}
+        <div className="mt-4">
+          <RotateKeyButton
+            productId={product.id}
+            productName={product.name}
+            currentKid={product.activeSigningKeyId}
+          />
+        </div>
+      </div>
     </div>
   );
 }

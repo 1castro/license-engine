@@ -7,6 +7,18 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Added — Phase 5 Audit + Härtung
+- Audit-Log-Service (`src/lib/services/audit-log-service.ts`) + `/api/admin/v1/audit-logs` Route mit Filter (eventType, actorType, actorId, targetType, targetId, from, until) und Offset-Pagination. Scope `audit:read`.
+- Admin-UI `/admin/audit-log`: RSC-Tabelle mit Zeitpunkt/Event/Actor/Target/IP-Hash/Metadata, Client-Filter-Form (2x4-Grid + Footer-Buttons), Client-Pagination. Sidebar-Item aktiviert. i18n unter `auditLog.*`.
+- Brute-Force-Protection (`src/lib/auth/login-backoff.ts`): stateful progressives Backoff 0s/0s/5s/15s/45s/120s/300s (cap), in NextAuth-Authorize integriert, 5 Tests grün.
+- Key-Rotation-UI: `POST /api/admin/v1/products/[id]/rotate-key` + Dialog im Product-Edit mit Confirm/Success-States. AuditLog `signing_key.created` + `signing_key.rotated`.
+- Health-Check (`/api/health`) erweitert auf 4 parallele Checks: Database-Ping, KEK loadbar (32-Byte-Check), SigningKey-Coverage (kein Product ohne aktiven Key), AuditLog-Recency (`latestEventAgoSeconds`). 503 bei jedem Fehler.
+- `docs/BACKUP.md`: DB + KEK getrennt sichern, Beispiel-Skript für `pg_dump`-Cron, Restore-Test-Procedure, KEK-Rotation-Skizze.
+- `docs/AUDIT_WORKFLOW.md`: verbindlicher Pre-Deploy-Audit-Workflow für die drei Audit-Agenten + LOGBUCH-Format.
+
+### Fixed
+- Audit-Log-Filter: Buttons („Filter anwenden", „Zurücksetzen") rutschten in der `md:grid-cols-5`-Variante visuell aus der Card. Layout auf Filter-Felder als 2/4-Spalten-Grid + Buttons in Footer-Zeile rechtsbündig mit Border-Top umgestellt.
+
 ### Added — Phase 4 SDK JS/TS
 - `@tropicsoft/license-sdk-js`-Paket mit drei Entry-Points (Core, `/node`, `/browser`).
 - Storage-Adapter: `createMemoryStorage`, `createFileSystemStorage` (Mode 0600, Key-Sanitization), `createIndexedDbStorage` (mit localStorage-Fallback).

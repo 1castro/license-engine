@@ -73,7 +73,13 @@
     "deleteConfirm": "Really delete product \"{name}\"? This cannot be undone.",
     "deleteInUse": "Cannot delete: {count} license(s) still reference this product.",
     "revocationRecheck": "Recheck (default)",
-    "revocationRefresh": "Refresh token"
+    "revocationRefresh": "Refresh token",
+    "signingKey": "Signing key",
+    "signingKeyHint": "Active Ed25519 key used to sign license tokens. On rotation, the old key is retained for verification (grace).",
+    "rotateKey": "Rotate key",
+    "rotateKeyConfirm": "Generate a new signing key for \"{name}\"? The previous key is retained for verifying already-issued tokens.",
+    "rotateKeySuccess": "New signing key generated: {kid}",
+    "rotateKeyFailed": "Rotation failed: {error}"
   },
   "customers": {
     "title": "Customers",
@@ -151,6 +157,31 @@
     "revokeTitle": "Revoke API key",
     "revokeConfirm": "Really revoke API key \"{name}\"? All callers immediately lose access.",
     "errorAlreadyRevoked": "This API key is already revoked."
+  },
+  "auditLog": {
+    "title": "Audit log",
+    "subtitle": "Security-relevant events, newest first",
+    "empty": "No entries yet.",
+    "timestamp": "Timestamp",
+    "event": "Event",
+    "actor": "Actor",
+    "target": "Target",
+    "ipHash": "IP hash",
+    "metadata": "Metadata",
+    "filterEventType": "Event type",
+    "filterActorType": "Actor type",
+    "filterFrom": "From",
+    "filterUntil": "Until",
+    "filterAll": "All",
+    "actorAdmin": "Admin",
+    "actorApiKey": "API key",
+    "actorSystem": "System",
+    "actorAnonymous": "Anonymous",
+    "apply": "Apply filter",
+    "reset": "Reset",
+    "previous": "Previous",
+    "next": "Next",
+    "showingRange": "Entries {from}–{to} of {total}"
   },
   "errors": {
     "validation": "Validation error.",

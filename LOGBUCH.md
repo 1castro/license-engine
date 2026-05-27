@@ -4,6 +4,53 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-05-27 — Phase 5 Audit + Härtung komplett
+
+### Bündel A — Audit-Log-Viewer
+- `lib/services/audit-log-service.ts` mit `listAuditLogs(query)` (Zod-Schema mit eventType/actorType/actorId/targetType/targetId/from/until/limit/offset) + `getLatestAuditLogTimestamp()`.
+- `app/api/admin/v1/audit-logs/route.ts` GET mit Scope `audit:read`.
+- Admin-UI `/admin/audit-log` (Server Component): Tabelle mit Zeitpunkt/Event/Actor/Target/IP-Hash/Metadata, Filter-Form als Client-Component (`audit-log-filter.tsx`), Pagination als Client-Component (`audit-log-pagination.tsx`).
+- Sidebar im Admin-Layout für Audit-Log aktiviert (war disabled).
+- i18n-Strings unter `auditLog.*` in beiden Locales.
+
+### Bündel B — Brute-Force-Protection
+- `lib/auth/login-backoff.ts`: stateful per-Identifier, Skala 0s/0s/5s/15s/45s/120s/300s (cap), Index 1 = „erster Tippfehler = free probe". `recordSuccess` resettet den Counter.
+- In `auth/config.ts` eingehängt: `check` direkt nach `loginLimiter.tryConsume`, `recordFailure` bei jedem der drei Fail-Pfade (unknown_email/bad_password/bad_totp), `recordSuccess` nach erfolgreichem TOTP.
+- 5 Unit-Tests grün (free probe, increasing delay, cap, reset on success, isolation per identifier).
+
+### Bündel C — Key-Rotation-UI
+- `app/api/admin/v1/products/[id]/rotate-key/route.ts` POST mit Scope `products:write`, ruft `rotateSigningKey` aus dem Phase-3-Service.
+- `_components/rotate-key-button.tsx` Dialog: Confirm mit Product-Name, Success-State zeigt neuen `kid`. Lesbare Error-Mappings.
+- In Product-Edit-Page als Footer-Card mit Hinweis-Text + aktueller kid + Button eingebaut.
+
+### Bündel D — Health-Check verfeinert
+- `app/api/health/route.ts` umgebaut auf vier parallele Checks: `database` (Ping), `kek` (loadbar + 32 Byte), `signingKeys` (kein Product ohne aktiven Key), `auditLog` (latestEventAgoSeconds). 503 bei jedem Fehler.
+
+### Bündel E — Backup-Konzept
+- `docs/BACKUP.md` aufgenommen: was zu sichern ist (DB + KEK getrennt, NextAuth-Secret als Salt-Erhaltung), Beispiel-Skript für tägliches pg_dump mit Cron-Eintrag, Restore-Test-Procedure (Pflicht alle 90 Tage), KEK-Rotation-Skizze.
+
+### Bündel F — Audit-Workflow
+- `docs/AUDIT_WORKFLOW.md` aufgenommen: die drei Audits (Code / Workflow / Security), Sub-Agenten-Pattern, LOGBUCH-Format pro Audit-Lauf, Post-Deploy-Finding-Workflow.
+
+### Bündel G — Verifikation
+- typecheck/lint/test/build grün, **98 Tests** (85 Server inkl. 5 neuer Backoff-Tests + 13 SDK).
+- Browser-E2E:
+  - Audit-Log-Page rendert 16 Einträge mit aller Phase-2/3/4-History sauber, alle IPs gehasht.
+  - Filter `eventType=license.created` → 2 Treffer (admin + api_key Phase-2-Run).
+  - **Layout-Bug beim Filter** (User-Feedback): Buttons „Filter anwenden" + „Zurücksetzen" rutschten in `md:grid-cols-5` visuell aus der Card. Fix: Filter-Felder als 2-/4-Spalten-Grid, Buttons in eigener Footer-Zeile rechtsbündig mit Border-Top-Separator. Screenshots vor/nach in `docs/screenshots/phase5-audit-log-{before,after}-fix.png`.
+- Rotate-Key-Flow per UI:
+  - Dialog zeigt aktuelle kid + Confirm-Text mit Product-Name.
+  - Nach Klick: Success-State mit neuer kid `cmpnzwpfo00028c3m94ryemet`.
+  - DB-Check: alter Key `isActive=false` + rotatedAt gesetzt, neuer Key `isActive=true`, `Product.activeSigningKeyId` zeigt auf neuen.
+  - Audit-Events `signing_key.created` + `signing_key.rotated` (beide admin) in DB.
+- Enriched Health: alle 4 Checks `ok`, status `200`.
+
+### Nächster Schritt
+- Phase-5-Bundle committen + pushen.
+- Auf Phase-6-Go warten (Self-Service-Portal für Endkunden — Kunden-Login, eigene Lizenz-Verwaltung, Aktivierungen einsehen/freigeben, React-Bindings im SDK).
+
+---
+
 ## 2026-05-27 — Phase 4 SDK JS/TS komplett
 
 ### Package-Struktur

@@ -192,9 +192,28 @@ Detaillierte Phasen- und Task-Planung. Tasks werden während der Umsetzung verfe
 
 ## Phase 5 — Audit + Härtung
 
-**Status:** geplant
+**Status:** done (2026-05-27).
 
-Voraussichtlicher Scope:
+**Was steht:**
+- **Audit-Log-Viewer** im Admin-UI (`/admin/audit-log`): Service `audit-log-service.ts` mit `listAuditLogs` (Filter über eventType / actorType / actorId / targetType / targetId / from / until, Offset-Pagination), Route `/api/admin/v1/audit-logs` (scope `audit:read`), UI mit Filter-Form (Buttons in eigener Footer-Zeile rechtsbündig), Tabelle + Pagination. Sidebar-Item aktiviert.
+- **Brute-Force-Protection:** Stateful progressives Backoff (`src/lib/auth/login-backoff.ts`) zusätzlich zum bestehenden Token-Bucket-Rate-Limit. Wait-Skala 0s/0s/5s/15s/45s/120s/300s (cap), Reset bei Login-Success. In `auth/config.ts` integriert für `unknown_email` / `bad_password` / `bad_totp` jeweils mit `recordFailure`, `recordSuccess` nach erfolgreichem TOTP. 5 Unit-Tests grün.
+- **Key-Rotation-UI:** Button im Product-Edit + `POST /api/admin/v1/products/[id]/rotate-key`. Dialog mit Confirm + Success-State + Copy-Out des neuen `kid`. Audit-Events `signing_key.created` + `signing_key.rotated`.
+- **Health-Check verfeinert:** vier Checks parallel (DB-Ping, KEK loadbar + 32 Byte, jedes Product hat einen aktiven SigningKey, neuestes AuditLog-Event mit `latestEventAgoSeconds`). 503 bei jedem fehlgeschlagenen Check.
+- **`docs/BACKUP.md`:** Was zu sichern ist (DB + KEK getrennt, NextAuth-Secret), Beispiel-Skript für tägliches `pg_dump` + Cron, Restore-Test-Anleitung (Pflicht alle 90 Tage), KEK-Rotation-Skizze.
+- **`docs/AUDIT_WORKFLOW.md`:** Verbindlicher Pre-Deploy-Audit-Workflow für die drei Audit-Agenten (Code / Workflow / Security), LOGBUCH-Format für Audit-Dokumentation.
+
+**Verifikation:**
+- typecheck / lint / build grün, 98 Tests grün (85 Server inkl. 5 neuer Backoff-Tests + 13 SDK).
+- Browser-E2E: Audit-Log-Page zeigt 16 Einträge mit allen Phase-2/3/4-Events, Filter `eventType=license.created` reduziert korrekt auf 2 Treffer. Filter-Layout-Bug (Buttons rutschten außerhalb der Card) gefixt: jetzt Filter-Felder als 2x4-Grid, Buttons in Footer-Zeile rechtsbündig mit Border-Top. Screenshots vor/nach unter `docs/screenshots/phase5-audit-log-{before,after}-fix.png`.
+- Rotate-Key-Flow: alter Key `cmpnykref…` auf `isActive=false`, neuer Key `cmpnzwpfo…` auf `isActive=true`, `Product.activeSigningKeyId` umgesetzt, Audit-Events `signing_key.created` + `signing_key.rotated` (admin) in DB sichtbar.
+- Enriched Health-Endpoint: `{database:ok, kek:ok, signingKeys:{productsWithoutActiveKey:0}, auditLog:{latestEventAgoSeconds:836}}`, Status `ok`.
+
+**Offen / bewusst nicht in Phase 5:**
+- **Rate-Limiter auf Redis heben** für Multi-Instance-Deploy. Tag-1-Single-Instance reicht laut Briefing; Migration wird beim ersten Multi-Instance-Deploy (oder vorher, wenn der Lastdruck es nötig macht) gemacht.
+- **KEK-Rotation-Skript** (re-wrap aller `SigningKey.privateKeyEncrypted`-Werte mit neuem KEK): erst notwendig wenn ein konkreter Anlass besteht. Konzept steht in `BACKUP.md`.
+- **Multi-Stage-Dockerfile-`runtime`-Target** End-to-End-Build weiterhin offen (seit Phase 1).
+
+**Voraussichtlicher Scope (war Phase-5-Plan):**
 - Audit-Logging an allen sicherheitsrelevanten Stellen (IP-Hash, kein Klartext)
 - Audit-Log-Viewer im Admin-UI mit Filtern
 - Rate-Limiting verfeinert (Login, Activate, Recheck)

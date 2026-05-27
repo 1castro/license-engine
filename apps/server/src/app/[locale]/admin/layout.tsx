@@ -38,7 +38,7 @@ export default async function AdminLayout({
           <NavItem href="/admin/customers" label={t('customers')} />
           <NavItem href="/admin/licenses" label={t('licenses')} />
           <NavItem href="/admin/api-keys" label={t('apiKeys')} />
-          <NavItem href="/admin/audit-log" label={t('auditLog')} disabled />
+          <NavItem href="/admin/audit-log" label={t('auditLog')} />
           <NavItem href="/admin/settings" label={t('settings')} disabled />
         </nav>
         <div className="border-t border-neutral-200 px-3 py-3 text-sm">
