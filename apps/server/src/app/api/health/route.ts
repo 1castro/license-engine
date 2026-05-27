@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { getLogger } from '@/lib/logger';
 import { getKeyProvider } from '@/lib/crypto';
 import { getLatestAuditLogTimestamp } from '@/lib/services/audit-log-service';
+import { getMailSender } from '@/lib/mail/mail-sender';
+import { SmtpMailSender } from '@/lib/mail/smtp-mail-sender';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -21,6 +23,7 @@ interface HealthBody {
     kek: CheckResult;
     signingKeys: CheckResult & { productsWithoutActiveKey?: number };
     auditLog: CheckResult & { latestEventAgoSeconds?: number | null };
+    mail: CheckResult & { transport?: string };
   };
 }
 
@@ -66,6 +69,19 @@ async function checkSigningKeyCoverage(): Promise<CheckResult & { productsWithou
   }
 }
 
+async function checkMail(): Promise<CheckResult & { transport?: string }> {
+  const sender = getMailSender();
+  if (sender instanceof SmtpMailSender) {
+    const probe = await sender.healthProbe();
+    return probe.ok
+      ? { ok: true, transport: sender.transport }
+      : { ok: false, transport: sender.transport, detail: probe.error };
+  }
+  // ConsoleMailSender is always "ok" but we surface the transport so an
+  // operator notices when production is accidentally running on console.
+  return { ok: true, transport: sender.transport };
+}
+
 async function checkAuditLog(): Promise<CheckResult & { latestEventAgoSeconds?: number | null }> {
   try {
     const ts = await getLatestAuditLogTimestamp();
@@ -80,14 +96,15 @@ async function checkAuditLog(): Promise<CheckResult & { latestEventAgoSeconds?: 
 
 export async function GET() {
   const log = getLogger();
-  const [database, kek, signingKeys, auditLog] = await Promise.all([
+  const [database, kek, signingKeys, auditLog, mail] = await Promise.all([
     checkDb(),
     checkKek(),
     checkSigningKeyCoverage(),
     checkAuditLog(),
+    checkMail(),
   ]);
 
-  const checks = { database, kek, signingKeys, auditLog };
+  const checks = { database, kek, signingKeys, auditLog, mail };
   const allOk = Object.values(checks).every((c) => c.ok);
 
   if (!allOk) {

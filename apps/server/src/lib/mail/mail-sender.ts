@@ -1,12 +1,14 @@
 import { getLogger } from '../logger';
+import { getEnv } from '../env';
+import { SmtpMailSender } from './smtp-mail-sender';
 
 /**
  * MailSender abstraction.
  *
- * Tag-2 implementation: ConsoleMailSender, logs the rendered mail to stdout
- * via pino at INFO level. Production: SMTP-backed sender via nodemailer
- * against the tropicsoft mailcow server (separate follow-up step, see
- * Phase-6 LOGBUCH entry).
+ * Resolves at first call:
+ *   - if MAIL_TRANSPORT=console  → always ConsoleMailSender
+ *   - if MAIL_TRANSPORT=smtp     → require complete SMTP_* env, else throw
+ *   - otherwise                  → SmtpMailSender if SMTP_* complete, else Console fallback
  */
 export interface MailMessage {
   to: string;
@@ -40,8 +42,40 @@ class ConsoleMailSender implements MailSender {
 }
 
 let cached: MailSender | undefined;
+
+function buildSender(): MailSender {
+  const env = getEnv();
+  const smtpComplete =
+    !!env.SMTP_HOST && !!env.SMTP_PORT && !!env.SMTP_USER && !!env.SMTP_PASSWORD && !!env.SMTP_FROM;
+
+  if (env.MAIL_TRANSPORT === 'console') return new ConsoleMailSender();
+  if (env.MAIL_TRANSPORT === 'smtp') {
+    if (!smtpComplete) {
+      throw new Error('MAIL_TRANSPORT=smtp but SMTP_* env vars are incomplete');
+    }
+    return new SmtpMailSender({
+      host: env.SMTP_HOST!,
+      port: env.SMTP_PORT!,
+      user: env.SMTP_USER!,
+      password: env.SMTP_PASSWORD!,
+      from: env.SMTP_FROM!,
+    });
+  }
+  // Auto: SMTP if complete, console fallback otherwise.
+  if (smtpComplete) {
+    return new SmtpMailSender({
+      host: env.SMTP_HOST!,
+      port: env.SMTP_PORT!,
+      user: env.SMTP_USER!,
+      password: env.SMTP_PASSWORD!,
+      from: env.SMTP_FROM!,
+    });
+  }
+  return new ConsoleMailSender();
+}
+
 export function getMailSender(): MailSender {
-  if (!cached) cached = new ConsoleMailSender();
+  if (!cached) cached = buildSender();
   return cached;
 }
 

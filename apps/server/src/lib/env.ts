@@ -15,6 +15,15 @@ const envSchema = z
       .default('info'),
     ADMIN_BOOTSTRAP_EMAIL: z.string().email().optional(),
     ADMIN_BOOTSTRAP_PASSWORD: z.string().min(12).optional(),
+    // SMTP — all optional; if all five are set, SmtpMailSender is used
+    // automatically, otherwise ConsoleMailSender prints to the pino log.
+    SMTP_HOST: z.string().min(1).optional(),
+    SMTP_PORT: z.coerce.number().int().min(1).max(65535).optional(),
+    SMTP_USER: z.string().min(1).optional(),
+    SMTP_PASSWORD: z.string().min(1).optional(),
+    SMTP_FROM: z.string().min(1).optional(),
+    /** Force a specific mail transport. Default = auto (smtp if configured, else console). */
+    MAIL_TRANSPORT: z.enum(['console', 'smtp']).optional(),
   })
   .refine((data) => data.ENCRYPTION_KEY || data.ENCRYPTION_KEY_FILE, {
     message: 'Either ENCRYPTION_KEY or ENCRYPTION_KEY_FILE must be set.',
