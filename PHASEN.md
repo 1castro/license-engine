@@ -145,9 +145,38 @@ Detaillierte Phasen- und Task-Planung. Tasks werden während der Umsetzung verfe
 
 ## Phase 4 — SDK JS/TS
 
-**Status:** geplant
+**Status:** done (2026-05-27).
 
-Voraussichtlicher Scope:
+**Was steht:**
+- Paket `@tropicsoft/license-sdk-js` als pnpm-Workspace-Paket mit drei Entry-Points:
+  - `@tropicsoft/license-sdk-js` — framework-agnostic Core (Memory-Storage, `createLicenseClient`).
+  - `@tropicsoft/license-sdk-js/node` — `createNodeLicenseClient`, Filesystem-Storage, Auto-Installation-ID-Binding.
+  - `@tropicsoft/license-sdk-js/browser` — `createBrowserLicenseClient`, IndexedDB-Storage (mit localStorage-Fallback), Auto-Domain-Binding.
+- Public-Keys-Discovery: SDK fetched `/api/v1/.well-known/public-keys` online und cached im Storage (24h TTL Default, fällt bei Server-Unerreichbarkeit auf gestale Keys zurück).
+- Token-Verify mit `jose` + strikter Algorithmus-Pinning (kein `alg:none`, kein HS256-Confusion-Angriff), `kid`-Lookup für Rotation-Grace.
+- License-Key-Validator SDK-seitig (Crockford-Base32 mit Checksum) — fängt Tippfehler vor dem Server-Roundtrip ab.
+- Typed Errors: `LicenseInvalidKeyError`, `LicenseNotActiveError`, `LicenseRevokedError`, `LicenseExpiredError`, `BindingMismatchError`, `LicenseTokenInvalidError`, `ServerUnreachableError` (mit `withinGracePeriod`-Info).
+- Re-Check-Logik: bei `validate()` wird opportunistisch ein Recheck ausgelöst, wenn das letzte Recheck-Intervall abgelaufen ist; bei Server-Unerreichbarkeit aber gültigem cached Token kein Fehler (Grace-Period).
+- Node-Demo-CLI in `packages/sdk-js/demo/cli.ts`: `pnpm demo activate/validate/recheck/deactivate/clear`.
+
+**Verifikation:**
+- `pnpm typecheck`, `pnpm lint`, `pnpm build` grün.
+- 13 SDK-Tests grün (license-key 6, verify 4, storage 3) + 80 Server-Tests = **93 Tests grün**.
+- Demo-CLI gegen lokal laufenden Server gegen Lizenz `TR0P-Y1C7-…-CHS0` mit Product `avatar-pro` durchgespielt:
+  1. `activate` → Token persistiert, expiresAt `iat+7d`, features `[voice]`.
+  2. `validate` → Cache-Hit, kein Server-Roundtrip, `refreshedFromServer=false`.
+  3. `recheck` → Server-Roundtrip, neuer Token, `refreshedFromServer=true`.
+  4. Persistence in `~/.config/license-engine/avatar-pro/`: `installation-id.v1`, `license-state.v1`, `public-keys.v1`, alle mit Mode `0600`.
+  5. `deactivate domain` → `released=true`.
+  6. Invalid Key (Checksum-Tippfehler) → `LicenseInvalidKeyError` mit Reason — abgefangen ohne Server-Roundtrip.
+  7. `clear` + `validate` → `LicenseNotActiveError`.
+
+**Offen / abweichend:**
+- React-Bindings als optionales Sub-Paket: nicht Tag 1 implementiert. Kommt mit Phase 6 (Self-Service-Portal), dort macht's konkret Sinn.
+- Multi-Stage-Dockerfile-`runtime`-Target weiterhin nicht End-to-End-gebaut.
+- License-Key-Validator ist im SDK und im Server-Code dupliziert. Move nach `@license-engine/shared-types` ist Kandidat für eine spätere Konsolidierung.
+
+**Voraussichtlicher Scope (war Phase-4-Plan):**
 - Paket `@tropicsoft/license-sdk-js` (Workspaces, eigenes `package.json`)
 - Framework-agnostic Core: `activate()`, `validate()`, `recheck()`, `deactivate()`
 - Storage-Adapter (Browser: IndexedDB; Node: Dateisystem; konfigurierbar)

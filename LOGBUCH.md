@@ -4,6 +4,54 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-05-27 — Phase 4 SDK JS/TS komplett
+
+### Package-Struktur
+- `packages/sdk-js/` ist jetzt aktiv (war Phase-1-Skelett). Dependencies: `jose` (für Token-Verify), `@license-engine/shared-types`. DevDeps: `vitest`, `tsx`, `@types/node`.
+- Drei Entry-Points via `exports`-Map in package.json:
+  - `@tropicsoft/license-sdk-js` (Core, framework-agnostic)
+  - `@tropicsoft/license-sdk-js/node` (FS-Storage + Installation-ID-Binding)
+  - `@tropicsoft/license-sdk-js/browser` (IndexedDB + Domain-Binding)
+- tsconfig: `lib:["ES2022","DOM"]`, `types:["node"]` — IDB-Typen + Node-Crypto im selben Workspace.
+
+### Core (Bündel A-D)
+- `types.ts`: `LicenseClientConfig`, `StorageAdapter`, `BindingInput`, `ActivateResponse`/`RecheckResponse`/`PublicKeyEntry`/`LicenseTokenClaims`, `ValidatedLicense`.
+- `errors.ts`: `LicenseSdkError`-Hierarchie mit `LicenseInvalidKeyError` (Reason), `LicenseNotActiveError`, `LicenseRevokedError` (revokedAt), `LicenseExpiredError` (expiredAt), `BindingMismatchError`, `LicenseTokenInvalidError` (code), `ServerUnreachableError` (reason + withinGracePeriod + tokenExpiresAt).
+- `license-key.ts`: Crockford-Base32-Validator + `normalizeLicenseKey`, 1:1 zum Server-Code, ohne Server-Deps. 6 Tests grün.
+- `storage/memory.ts`: In-Memory-Map. `storage/filesystem.ts`: Node FS unter `~/.config/license-engine/<productSlug>/` (oder `$LICENSE_ENGINE_STATE_DIR`), Mode 0600, key-sanitization gegen Directory-Traversal. `storage/indexeddb.ts`: IDB mit localStorage-Fallback für Private-Mode.
+- `discovery.ts`: `loadPublicKeys` cached unter `public-keys.v1` mit `serverUrl`-Tag, 24h TTL Default, fallback auf gestale Keys bei Server-Unerreichbarkeit. `PublicKeysFetchError` mit `status`-Code.
+- `verify.ts`: `verifyLicenseToken` mit Header-Pre-Peek auf alg/kid (vor jose-Aufruf), Algorithmus-Pinning `EdDSA`, Multi-Key-Lookup per kid+productSlug, mapped jose-Errors auf `LicenseTokenInvalidError`-Codes (`expired`/`audience_mismatch`/`signature_invalid`/`malformed`/`unknown_kid`).
+- `client.ts`: `createLicenseClient` mit `activate`/`validate`/`recheck`/`deactivate`/`clear`. State unter `license-state.v1` (licenseKey + productSlug + token + expiresAt + recheckIntervalHours + lastRecheckAt + bindings). `validate()` ruft opportunistisch `recheck()` wenn `lastRecheckAt + recheckIntervalHours <= now`; bei Server-Unerreichbarkeit aber gültigem Token kein Fehler (Grace-Period). Fetch mit AbortController-Timeout (Default 10s).
+- `node.ts`: `createNodeLicenseClient` wired FS-Storage + auto-erzeugte UUID-Installation-ID als `installation`-Binding.
+- `browser.ts`: `createBrowserLicenseClient` wired IndexedDB + `location.hostname` als `domain`-Binding.
+
+### Tests (Bündel E)
+- 13 SDK-Tests grün: license-key 6 (Phase-2-Key TR0P-VMY6-… als Roundtrip-Fixture, Crockford-Normalisierung, Checksum-Tippfehler-Reject), verify 4 (gültiger EdDSA-Token, `alg:none`-Reject, unknown kid-Reject, wrong audience-Reject), storage 3 (Memory-Roundtrip, FS-Persistence across Instances, Directory-Traversal-Reject).
+- Insgesamt jetzt **93 Tests grün** (80 Server + 13 SDK).
+
+### Demo-CLI (Bündel F) + E2E gegen lokalen Server
+- `packages/sdk-js/demo/cli.ts`: Commands `activate <key>`/`validate`/`recheck`/`deactivate [value]`/`clear`. Env-Override `LICENSE_SERVER` + `LICENSE_PRODUCT_SLUG` + `LICENSE_ENGINE_STATE_DIR`. Catch-Mapping aller SDK-Error-Klassen auf lesbare CLI-Output + Exit-Code.
+- Live-Run gegen `localhost:3000` mit Lizenz `TR0P-Y1C7-P3EY-A9AN-CHS0` (Product avatar-pro):
+  1. `activate` → Token (766 Chars), expiresAt `2026-06-03T11:25:13Z`, features `[voice]`.
+  2. `validate` → `refreshedFromServer=false` (Cache-Hit).
+  3. `recheck` → `refreshedFromServer=true`, neuer Token (expiresAt 1s später).
+  4. State persistiert in `/tmp/license-sdk-demo/license-engine/avatar-pro/{installation-id.v1, license-state.v1, public-keys.v1}`, alle Mode 0600.
+  5. `deactivate cli-demo.example.com` → `released=true`.
+  6. `activate TR0P-Y1C7-…-CHS5` (kaputte Checksum) → `License key invalid: group 4 checksum mismatch` (kein Server-Roundtrip!).
+  7. `clear` + `validate` → `No cached activation — call activate() first.`
+
+### Designentscheidungen
+- Public Keys werden online geholt (statt build-time gebundled), damit Rotation ohne SDK-Redeploy greift.
+- Drei Storage-Adapter (Memory/FS/IDB) statt einer abstrakten Default-Implementierung — die OS-spezifischen Bits liegen klar in `/node` und `/browser`, das `index` bleibt zero-OS-deps.
+- License-Key-Validator dupliziert (statt shared-types-Move) — Tag-1-Pragma, da der Code stabil und sicherheitskritisch ist; Konsolidierung ist Kandidat für später.
+- React-Bindings vertagt auf Phase 6, weil Self-Service-Portal der erste konkrete React-Use-Case wird.
+
+### Nächster Schritt
+- Phase-4-Bundle committen + pushen.
+- Auf Phase-5-Go warten: Audit + Härtung (Audit-Log-Viewer im Admin-UI, Backup-Konzept, Rate-Limiter auf Redis heben, Health-Check-Verfeinerung, Brute-Force-Protection mit progressivem Backoff).
+
+---
+
 ## 2026-05-27 — Phase 3 Token-Engine komplett
 
 ### Bundle A — Crypto + SigningKey-Service

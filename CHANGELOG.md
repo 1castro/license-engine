@@ -7,6 +7,18 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Added — Phase 4 SDK JS/TS
+- `@tropicsoft/license-sdk-js`-Paket mit drei Entry-Points (Core, `/node`, `/browser`).
+- Storage-Adapter: `createMemoryStorage`, `createFileSystemStorage` (Mode 0600, Key-Sanitization), `createIndexedDbStorage` (mit localStorage-Fallback).
+- `createLicenseClient(config)` framework-agnostic mit `activate`/`validate`/`recheck`/`deactivate`/`clear`. `validate()` führt opportunistisch `recheck()` aus, fällt bei Server-Unerreichbarkeit + gültigem Token auf Cache zurück (Grace-Period).
+- `createNodeLicenseClient` / `createBrowserLicenseClient`: Convenience-Wrappers mit Auto-Bindings (UUID-Installation-ID / `location.hostname`).
+- Public-Keys-Discovery: cached unter `public-keys.v1`, 24h TTL Default, Fallback auf gestale Keys bei Server-Outage.
+- Token-Verify mit `jose` + striktem Algorithm-Pinning (kein `alg:none`, kein HS256-Confusion), `kid`-Lookup per Product.
+- Typed Errors: `LicenseInvalidKeyError`, `LicenseNotActiveError`, `LicenseRevokedError`, `LicenseExpiredError`, `BindingMismatchError`, `LicenseTokenInvalidError`, `ServerUnreachableError` (mit `withinGracePeriod` + `tokenExpiresAt`).
+- License-Key-Validator (Crockford-Base32 mit Checksum) SDK-seitig, fängt Tippfehler vor Server-Roundtrip ab.
+- Demo-CLI in `packages/sdk-js/demo/cli.ts`: `pnpm demo activate/validate/recheck/deactivate/clear`.
+- 13 SDK-Tests grün (license-key 6, verify 4 inkl. `alg:none`-Reject + Unknown-kid + Wrong-Audience, storage 3).
+
 ### Added — Phase 3 Token-Engine
 - AES-256-GCM-Envelope-Encryption (`src/lib/crypto/envelope.ts`) für SigningKey.privateKeyEncrypted, mit KEK aus dem KeyProvider. 5 Tests grün (Roundtrip, Random-Nonce, Tampered-Tag-Reject, Tampered-Ciphertext-Reject, Too-Short-Blob).
 - SigningKey-Service (`src/lib/signing/signing-key-service.ts`): Ed25519-Keypair-Generierung über `jose`, Hook in `createProduct` für automatische Erzeugung, Rotate-Funktion (alte Keys bleiben für Verifikation), `getActiveSigningKey`, `getAllPublicKeysForProduct`, `listAllPublicKeys`.
