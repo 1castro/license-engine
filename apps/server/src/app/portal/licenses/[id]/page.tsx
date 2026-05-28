@@ -1,21 +1,14 @@
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import { getPortalSession } from '@/lib/portal/session';
-import { ReleaseActivationButton } from './release-button';
+import { getSeatUsage } from '@/lib/binding/activation-service';
+import { parseBindingPolicy } from '@/lib/binding/binding-policy';
+import {
+  PortalActivationsView,
+  type PortalActivationItem,
+} from './portal-activations-view';
 
 export const dynamic = 'force-dynamic';
-
-const BINDING_LABEL: Record<string, string> = {
-  domain: 'Domain',
-  device: 'Gerät',
-  account: 'Account',
-  installation: 'Installation',
-};
-
-const ACTIVATION_STATUS_LABEL: Record<string, string> = {
-  active: 'Aktiv',
-  released: 'Freigegeben',
-};
 
 export default async function PortalLicenseDetailPage({
   params,
@@ -41,6 +34,21 @@ export default async function PortalLicenseDetailPage({
   const features = Array.isArray(license.featureFlags)
     ? (license.featureFlags.filter((f) => typeof f === 'string') as string[])
     : [];
+
+  const seats = await getSeatUsage(id, parseBindingPolicy(license.bindingPolicy));
+  const items: PortalActivationItem[] = license.activations.map((a) => {
+    const meta = a.bindingValueMetadata as Record<string, unknown> | null;
+    return {
+      id: a.id,
+      bindingType: a.bindingType,
+      displayName: meta && typeof meta.displayName === 'string' ? meta.displayName : null,
+      identifier: meta && typeof meta.identifier === 'string' ? meta.identifier : null,
+      status: a.status,
+      activatedAt: a.activatedAt.toISOString(),
+      lastSeenAt: a.lastSeenAt.toISOString(),
+      releasedAt: a.releasedAt ? a.releasedAt.toISOString() : null,
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -85,69 +93,14 @@ export default async function PortalLicenseDetailPage({
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-lg font-semibold">Aktivierungen</h2>
-        {license.activations.length === 0 ? (
-          <p className="rounded border border-neutral-200 bg-white p-4 text-sm text-neutral-500">
-            Diese Lizenz wurde noch nicht aktiviert.
+        <div>
+          <h2 className="text-lg font-semibold">Nutzung &amp; Plätze</h2>
+          <p className="text-sm text-neutral-600">
+            Hier sehen Sie, wer Ihre Lizenz nutzt. Geben Sie einen Platz frei, wenn ein Mitarbeiter
+            oder Gerät ihn nicht mehr braucht — der Platz wird dann für jemand anderen frei.
           </p>
-        ) : (
-          <ul className="space-y-2">
-            {license.activations.map((a) => (
-              <li
-                key={a.id}
-                className="flex items-start justify-between rounded border border-neutral-200 bg-white p-4 text-sm"
-              >
-                <div>
-                  <p className="font-medium">
-                    {BINDING_LABEL[a.bindingType] ?? a.bindingType}
-                    {(() => {
-                      const meta = a.bindingValueMetadata as Record<string, unknown> | null;
-                      const displayName =
-                        meta && typeof meta.displayName === 'string' ? meta.displayName : null;
-                      return displayName ? (
-                        <span className="ml-2 font-normal text-neutral-700">— {displayName}</span>
-                      ) : null;
-                    })()}
-                  </p>
-                  {(() => {
-                    const meta = a.bindingValueMetadata as Record<string, unknown> | null;
-                    const ua = meta && typeof meta.userAgent === 'string' ? meta.userAgent : null;
-                    const runtime =
-                      meta && typeof meta.runtime === 'string' ? meta.runtime : null;
-                    const subtitle = [runtime, ua].filter(Boolean).join(' · ');
-                    return subtitle ? (
-                      <p className="mt-0.5 text-xs text-neutral-600">{subtitle}</p>
-                    ) : null;
-                  })()}
-                  <p className="mt-1 font-mono text-xs text-neutral-400">
-                    Hash {a.bindingValueHash.slice(0, 16)}…
-                  </p>
-                  <p className="mt-1 text-xs text-neutral-500">
-                    Aktiviert: {a.activatedAt.toLocaleString('de-DE')}
-                    {' · '}Zuletzt gesehen: {a.lastSeenAt.toLocaleString('de-DE')}
-                    {a.releasedAt && (
-                      <>
-                        {' · '}Freigegeben: {a.releasedAt.toLocaleString('de-DE')}
-                      </>
-                    )}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span
-                    className={`rounded px-2 py-1 text-xs font-medium ${
-                      a.status === 'active'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-neutral-200 text-neutral-700'
-                    }`}
-                  >
-                    {ACTIVATION_STATUS_LABEL[a.status] ?? a.status}
-                  </span>
-                  {a.status === 'active' && <ReleaseActivationButton activationId={a.id} />}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        </div>
+        <PortalActivationsView activations={items} seats={seats} />
       </div>
     </div>
   );

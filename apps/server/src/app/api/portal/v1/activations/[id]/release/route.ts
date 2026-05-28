@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ActivationStatus } from '@prisma/client';
+import { ActivationStatus, BindingType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { extractIp, writeAuditLog, AuditEventType } from '@/lib/audit';
 import { getPortalSession } from '@/lib/portal/session';
@@ -35,6 +35,12 @@ export async function POST(req: Request, { params }: RouteParams) {
   if (activation.license.customerId !== session.customerId) {
     // Same response shape as not-found to avoid leaking existence of other customers' activations.
     return jsonError(404, 'not_found', 'Aktivierung nicht gefunden');
+  }
+  // The domain binding is the app's fixed license identity, not a usage seat —
+  // customers may view it but not release it (the admin UI still can). Enforced
+  // server-side, not just hidden in the portal UI.
+  if (activation.bindingType === BindingType.domain) {
+    return jsonError(403, 'not_releasable', 'Die Domain-Bindung kann nicht freigegeben werden.');
   }
   if (activation.status === ActivationStatus.released) {
     return NextResponse.json({ released: false, reason: 'already_released' });
