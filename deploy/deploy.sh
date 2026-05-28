@@ -45,8 +45,10 @@ rsync -az --delete \
 echo "==> Compose-File in den Stack-Ordner kopieren"
 scp "$REPO_ROOT/deploy/compose.yaml" "$SSH_HOST:$STACK_DIR/compose.yaml"
 
-echo "==> Build (Layer-Cache)"
-ssh "$SSH_HOST" "cd '$STACK_DIR' && docker compose build"
+echo "==> Build (Layer-Cache) — inkl. migrate-Profile (builder-Image)"
+# --profile migrate, damit auch das builder-Image (für Migrations) frisch gebaut
+# wird; ohne das Profil ließe `build` den profile-Service aus.
+ssh "$SSH_HOST" "cd '$STACK_DIR' && docker compose --profile migrate build"
 
 echo "==> Migrations einspielen (one-shot, Profile 'migrate')"
 # --rm: kein zurückbleibender exited Container -> Dockge zeigt den Stack als
