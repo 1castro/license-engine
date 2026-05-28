@@ -11,6 +11,8 @@ export interface ActivationItem {
   bindingType: string;
   hashPreview: string;
   displayName: string | null;
+  /** Short, human-readable identifier (e.g. username / member ID), if provided. */
+  identifier: string | null;
   status: 'active' | 'released';
   activatedAt: string;
   lastSeenAt: string;
@@ -99,6 +101,7 @@ function ActivationGroup({
     return items.filter(
       (a) =>
         (a.displayName?.toLowerCase().includes(q) ?? false) ||
+        (a.identifier?.toLowerCase().includes(q) ?? false) ||
         a.hashPreview.toLowerCase().includes(q),
     );
   }, [items, query]);
@@ -145,6 +148,11 @@ function ActivationGroup({
               <div>
                 <p className="font-medium">
                   {a.displayName ?? <span className="text-neutral-500">{t('noDisplayName')}</span>}
+                  {a.identifier && (
+                    <span className="ml-2 font-mono text-xs font-normal text-neutral-500">
+                      {a.identifier}
+                    </span>
+                  )}
                 </p>
                 <p className="mt-1 font-mono text-xs text-neutral-400">
                   {t('hashLabel')} {a.hashPreview}…

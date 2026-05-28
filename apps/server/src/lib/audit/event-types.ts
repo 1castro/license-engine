@@ -44,6 +44,7 @@ export const AuditEventType = {
   // Customer portal (self-service)
   PortalPasswordSet: 'portal.password_set',
   PortalPasswordReset: 'portal.password_reset',
+  PortalSetupMailResent: 'portal.setup_mail_resent',
 } as const;
 
 export type AuditEventType = (typeof AuditEventType)[keyof typeof AuditEventType];

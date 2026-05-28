@@ -152,3 +152,32 @@ export async function deleteCustomer(id: string, ctx: AdminAuthContext): Promise
     ip: ctx.ip,
   });
 }
+
+export class CustomerNotFoundError extends Error {
+  constructor(public readonly customerId: string) {
+    super(`Customer not found: ${customerId}`);
+    this.name = 'CustomerNotFoundError';
+  }
+}
+
+/**
+ * Re-sends the portal setup mail (initial password link) to a customer — for
+ * the case the original mail was lost or the 72h token expired. Issuing a new
+ * setup token invalidates any prior unused one. Works regardless of whether the
+ * customer already set a password (admin's call).
+ */
+export async function resendSetupMail(id: string, ctx: AdminAuthContext): Promise<void> {
+  const customer = await prisma.customer.findUnique({ where: { id } });
+  if (!customer) {
+    throw new CustomerNotFoundError(id);
+  }
+  await sendSetupMail(customer);
+  await writeAuditLog({
+    eventType: AuditEventType.PortalSetupMailResent,
+    ...actorOf(ctx),
+    targetType: 'Customer',
+    targetId: id,
+    metadata: { email: customer.email },
+    ip: ctx.ip,
+  });
+}

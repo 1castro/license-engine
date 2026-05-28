@@ -39,6 +39,7 @@ export default async function LicenseActivationsPage({
       bindingType: a.bindingType,
       hashPreview: a.bindingValueHash.slice(0, 16),
       displayName: meta && typeof meta.displayName === 'string' ? meta.displayName : null,
+      identifier: meta && typeof meta.identifier === 'string' ? meta.identifier : null,
       status: a.status,
       activatedAt: a.activatedAt.toISOString(),
       lastSeenAt: a.lastSeenAt.toISOString(),

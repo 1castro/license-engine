@@ -37,6 +37,7 @@
     "delete": "Delete",
     "edit": "Edit",
     "create": "Create",
+    "close": "Close",
     "status": "Status",
     "actions": "Actions",
     "createdAt": "Created",
@@ -85,6 +86,10 @@
   "customers": {
     "title": "Customers",
     "subtitle": "Customers and external references",
+    "resendSetupAction": "Resend setup mail",
+    "resendSetupTitle": "Resend setup mail",
+    "resendSetupConfirm": "Send customer \"{name}\" another mail to set their portal password? Any pending link becomes invalid.",
+    "resendSetupDone": "Setup mail has been sent.",
     "empty": "No customers yet.",
     "email": "Email",
     "name": "Name",

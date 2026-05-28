@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { MoreHorizontal, Pencil, Trash } from 'lucide-react';
+import { Mail, MoreHorizontal, Pencil, Trash } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import { DeleteCustomerDialog } from './delete-customer-dialog';
+import { ResendSetupDialog } from './resend-setup-dialog';
 
 export function CustomerRowActions({
   customerId,
@@ -23,7 +24,9 @@ export function CustomerRowActions({
   customerName: string;
 }) {
   const t = useTranslations('common');
+  const tCustomers = useTranslations('customers');
   const [open, setOpen] = useState(false);
+  const [resendOpen, setResendOpen] = useState(false);
 
   return (
     <>
@@ -43,6 +46,15 @@ export function CustomerRowActions({
           <DropdownMenuItem
             onSelect={(event) => {
               event.preventDefault();
+              setResendOpen(true);
+            }}
+          >
+            <Mail className="mr-2 h-4 w-4" />
+            {tCustomers('resendSetupAction')}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={(event) => {
+              event.preventDefault();
               setOpen(true);
             }}
             className="text-destructive focus:text-destructive"
@@ -55,6 +67,12 @@ export function CustomerRowActions({
       <DeleteCustomerDialog
         open={open}
         onOpenChange={setOpen}
+        customerId={customerId}
+        customerName={customerName}
+      />
+      <ResendSetupDialog
+        open={resendOpen}
+        onOpenChange={setResendOpen}
         customerId={customerId}
         customerName={customerName}
       />
