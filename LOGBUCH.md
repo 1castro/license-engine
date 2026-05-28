@@ -4,6 +4,28 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-05-28 — Phase A: Seat-Management für App-Lizenzierung (v1.1.0)
+
+Engine-Seite für seat-basierte App-Lizenzierung (erster Testfall Fahrdienst, account-basiert). Konzept: `docs/INTEGRATION.md`. Genehmigter Plan, in 6 Schritten umgesetzt.
+
+- **A1 Seat-Zahlen**: `getSeatUsage(licenseId, policy)` (zählt aktive Activations pro policy-relevantem Typ), `seats`-Array in activate + recheck, SDK-Typen erweitert.
+- **A2/A3 Verwaltung + API**: `listActivationsForLicense` + `releaseActivationById` (idempotent, lizenz-scoped, Audit). Neue Endpoints `GET /api/admin/v1/licenses/[id]/activations` + `POST .../[activationId]/release`, Scopes `activations:read/write`.
+- **A4 Mandanten-Isolation**: `ApiKey.licenseId` (nullable FK, additive Migration `20260528103025`), `enforceLicenseAccess` (gebundener Key → fremde Lizenz = 404). API-Key-Create unterstützt Bindung.
+- **A5 Admin-UI**: `/admin/licenses/[id]/activations` (Auslastung + Liste + Release-Modal), Link im Row-Dropdown, i18n-Namespace `activations`.
+
+**E2E lokal verifiziert**: activate account:2 → 2 ok + seats, 3. → 409; GET/release per gebundenem API-Key; Release gibt Platz frei → Re-Aktivierung; fremde Lizenz → 404; ohne Key → 401.
+
+**Pre-Deploy-Audit (3 Agenten)**: Security GRÜN; Code + Workflow je 1 Major gefixt:
+- FK-Violation bei API-Key-Create mit ungültiger licenseId → jetzt 400 statt 500 (Vorab-Prüfung `license.findUnique`).
+- `docs/INTEGRATION.md` auf das tatsächliche `seats`-Array-Format korrigiert (statt seatsUsed/seatsMax).
+- Minor: `getSeatUsage` zählt Typen parallel (Promise.all).
+
+**Status: grün → deployed** (Commits `b76fcc0` + `0c4291e`). Migration in Prod angewandt, App healthy, `/admin/login` 200, neue Endpoints ohne Auth → 401.
+
+**Offen (Follow-up, kein Blocker)**: DB-Integration-Tests für Seat-Limit/Resurrection (Projekt hat noch keine DB-Test-Infra); App-Seite (Fahrdienst) folgt in eigenem Chat gegen diese API.
+
+---
+
 ## 2026-05-28 — Post-Deploy: Health-Abschirmung, Favicon, Changelog-UI, Dockge-Fix
 
 ### Health-Endpoint abgeschirmt (Shared-Token)

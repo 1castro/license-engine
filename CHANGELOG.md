@@ -7,6 +7,31 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [1.1.0] - 2026-05-28 — Seat-Management für App-Lizenzierung
+
+Grundlage, damit integrierte Apps ein Platz-Limit (Seats) nutzen, anzeigen und
+verwalten können — erster Anwendungsfall: der Fahrdienst (Lizenz pro Mandant,
+Plätze pro Fahrer-Account). Konzept: `docs/INTEGRATION.md`.
+
+### Hinzugefügt
+- **Seat-Auslastung in den API-Antworten**: `activate` und `recheck` liefern ein
+  `seats`-Array (`{ type, used, max }` je Binding-Typ), damit eine App
+  „37 von 100 Plätzen belegt" anzeigen kann.
+- **Aktivierungs-Verwaltung im Admin-UI**: pro Lizenz unter „Aktivierungen" die
+  belegten Plätze + Auslastung sehen und einzeln freigeben.
+- **Service-API für Seat-Management**: `GET /api/admin/v1/licenses/{id}/activations`
+  (auflisten) + `POST .../{activationId}/release` (freigeben), per API-Key mit den
+  neuen Scopes `activations:read` / `activations:write`.
+- **API-Key-Lizenz-Bindung**: Ein API-Key kann optional an eine einzelne Lizenz
+  gebunden werden — er sieht und verwaltet dann nur deren Plätze (Mandanten-
+  Isolation). Im API-Key-Dialog konfigurierbar.
+
+### Sicherheit
+- Lizenz-gebundener API-Key, der eine fremde Lizenz anfragt, erhält 404
+  (Existenz wird nicht preisgegeben). Read/Write-Scopes getrennt.
+
+---
+
 ## [1.0.0] - 2026-05-28 — Erste Production-Release (live auf license.tropicsoft.de)
 
 Erste Live-Schaltung nach zwei Pre-Deploy-Audit-Runden (Code-, Workflow-,

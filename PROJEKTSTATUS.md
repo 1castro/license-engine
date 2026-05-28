@@ -1,8 +1,10 @@
 # PROJEKTSTATUS — License Engine
 
-**Aktueller Stand:** **LIVE in Produktion.** Phase 1–6 feature-complete, durch drei Pre-Deploy-Audit-Runden gehärtet, deployed auf `188.245.95.60` und erreichbar unter **https://license.tropicsoft.de**.
+**Aktueller Stand:** **LIVE in Produktion (v1.1.0).** Phase 1–6 feature-complete + gehärtet + Seat-Management (Phase A) für App-Lizenzierung. Deployed auf `188.245.95.60`, erreichbar unter **https://license.tropicsoft.de**.
 
 **Letztes Update:** 2026-05-28
+
+**Nächster Schritt:** Erste reale App-Integration — Fahrdienst (PHP) gegen die Seat-API. Konzept + API-Vertrag: `docs/INTEGRATION.md`. App-Seite im Fahrdienst-Chat, Engine-Kontrolle hier.
 
 ---
 
