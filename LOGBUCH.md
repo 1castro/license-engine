@@ -6,8 +6,10 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ## 2026-05-28 — Post-Deploy: Health-Abschirmung, Favicon, Changelog-UI, Dockge-Fix
 
-### Health-Endpoint abgeschirmt
-- `/api/health` antwortet extern (über Reverse-Proxy, erkennbar an `x-forwarded-*`) mit 404; intern (Docker-Healthcheck, Monitoring im Docker-Netz) weiter erreichbar. Keine Infrastruktur-Interna mehr ohne Auth nach außen sichtbar. Die öffentliche API (`/api/v1/*`) bleibt unberührt.
+### Health-Endpoint abgeschirmt (Shared-Token)
+- `/api/health` ist von außen nur mit `HEALTH_CHECK_TOKEN` erreichbar (Header `x-health-token` oder `?token=`), sonst 404 — von außen unsichtbar. Der Docker-Healthcheck + Monitoring senden den Token.
+- Erster Ansatz (Gate auf `x-forwarded-*`) verworfen: der Next.js standalone-Server setzt **alle** `x-forwarded-*` Header selbst (auch bei localhost), also war der interne Healthcheck ebenfalls 404 → Container nie healthy. Token ist der einzige verlässliche intern/extern-Diskriminator.
+- Verifiziert nach Deploy: intern+Token 200, intern ohne Token 404, extern (Domain) 404, öffentliche API (`/api/v1/.well-known/public-keys`) + `/admin/login` 200, Favicon (ico/svg/png) 200.
 
 ### Favicon
 - `app/icon.svg` (Schlüssel-Symbol, blauer Gradient) + generiertes `favicon.ico` (16/32/48) + `apple-icon.png` (180) via `rsvg-convert`. Next.js App Router bindet alle drei automatisch ein. Im Browser verifiziert (Login-Seite, alle drei 200 + korrekte Content-Types).
