@@ -45,9 +45,16 @@ rsync -az --delete \
 echo "==> Compose-File in den Stack-Ordner kopieren"
 scp "$REPO_ROOT/deploy/compose.yaml" "$SSH_HOST:$STACK_DIR/compose.yaml"
 
-echo "==> Build (Layer-Cache) + Stack hochfahren"
-# migrate läuft als one-shot vor der App (service_completed_successfully).
-ssh "$SSH_HOST" "cd '$STACK_DIR' && docker compose build && docker compose up -d"
+echo "==> Build (Layer-Cache)"
+ssh "$SSH_HOST" "cd '$STACK_DIR' && docker compose build"
+
+echo "==> Migrations einspielen (one-shot, Profile 'migrate')"
+# --rm: kein zurückbleibender exited Container -> Dockge zeigt den Stack als
+# aktiv. `run` startet die DB-Abhängigkeit (healthy) automatisch mit.
+ssh "$SSH_HOST" "cd '$STACK_DIR' && docker compose run --rm license-engine-migrate"
+
+echo "==> App + DB hochfahren"
+ssh "$SSH_HOST" "cd '$STACK_DIR' && docker compose up -d"
 
 echo "==> Auf Health warten"
 ssh "$SSH_HOST" '

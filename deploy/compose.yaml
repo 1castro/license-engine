@@ -44,10 +44,15 @@ services:
         max-file: '3'
 
   # One-shot: `prisma migrate deploy` gegen die DB. Nutzt den builder-Stage,
-  # weil das schlanke runtime-Image keine Prisma-CLI enthält. Läuft bei jedem
-  # `up` erneut — migrate deploy ist idempotent (bereits angewandte Migrations
-  # werden übersprungen).
+  # weil das schlanke runtime-Image keine Prisma-CLI enthält.
+  #
+  # Im `migrate`-Profile -> NICHT Teil von `docker compose up`. deploy.sh ruft
+  # ihn explizit per `docker compose run --rm` vor dem App-Start. So bleibt im
+  # Dauerbetrieb kein exited Migrations-Container übrig, der Dockge/Monitoring
+  # den Stack fälschlich als "beendet" anzeigen lässt. migrate deploy ist
+  # idempotent (bereits angewandte Migrations werden übersprungen).
   license-engine-migrate:
+    profiles: ['migrate']
     build:
       context: /opt/license-engine/code
       dockerfile: Dockerfile
@@ -78,11 +83,12 @@ services:
     container_name: license-engine
     restart: unless-stopped
     stop_grace_period: 20s
+    # Migrations laufen vor dem App-Start explizit über deploy.sh
+    # (`docker compose run --rm license-engine-migrate`), nicht via depends_on —
+    # der migrate-Service ist im `migrate`-Profile und damit kein up-Teilnehmer.
     depends_on:
       license-engine-db:
         condition: service_healthy
-      license-engine-migrate:
-        condition: service_completed_successfully
     env_file:
       - .env
     environment:
