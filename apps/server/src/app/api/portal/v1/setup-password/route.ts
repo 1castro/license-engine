@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { extractIp } from '@/lib/audit';
+import { extractIp, hashIp } from '@/lib/audit';
+import { portalPasswordLimiter } from '@/lib/auth/rate-limit';
 import {
   PortalAuthError,
   setInitialPassword,
@@ -14,6 +15,11 @@ function jsonError(status: number, code: string, message: string) {
 }
 
 export async function POST(req: Request) {
+  const ipHashForLimit = hashIp(extractIp(req)) ?? 'no-ip';
+  if (!portalPasswordLimiter.tryConsume(ipHashForLimit)) {
+    return jsonError(429, 'rate_limited', 'Zu viele Versuche, bitte kurz warten');
+  }
+
   let body: unknown;
   try {
     body = await req.json();

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { loginLimiter } from '@/lib/auth/rate-limit';
 import { loginBackoff } from '@/lib/auth/login-backoff';
 import { getLogger } from '@/lib/logger';
-import { extractIp, hashIp } from '@/lib/audit';
+import { extractIp, hashIp, writeAuditLog, AuditEventType } from '@/lib/audit';
 import {
   loginCustomer,
   loginSchema,
@@ -52,6 +52,14 @@ export async function POST(req: Request) {
     });
     await setPortalSessionCookie(token, expiresAt);
     log.info({ event: 'portal.login.success', customerId: customer.id, ipHash }, 'Portal login');
+    await writeAuditLog({
+      eventType: AuditEventType.PortalLoginSuccess,
+      actorType: 'customer',
+      actorId: customer.id,
+      targetType: 'Customer',
+      targetId: customer.id,
+      ip,
+    });
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof PortalAuthError) {
@@ -60,6 +68,15 @@ export async function POST(req: Request) {
         { event: 'portal.login.fail', code: err.code, ipHash },
         'Portal login failed',
       );
+      // Anonymous actor + no email in metadata (DSGVO — only the hashed IP,
+      // added inside writeAuditLog, is persisted).
+      await writeAuditLog({
+        eventType: AuditEventType.PortalLoginFailure,
+        actorType: 'anonymous',
+        actorId: null,
+        metadata: { code: err.code },
+        ip,
+      });
       return jsonError(401, err.code, err.message);
     }
     throw err;

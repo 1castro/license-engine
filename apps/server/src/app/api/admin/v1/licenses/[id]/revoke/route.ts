@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { authorizeAdminRoute, jsonError } from '@/lib/auth/admin-route-auth';
+import { authorizeAdminRoute, enforceLicenseAccess, jsonError } from '@/lib/auth/admin-route-auth';
 import {
   LicenseAlreadyRevokedError,
   LicenseNotFoundError,
@@ -18,6 +18,8 @@ export async function POST(req: Request, { params }: RouteParams) {
   const auth = await authorizeAdminRoute(req, { requireScope: 'licenses:revoke' });
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
+  const denied = enforceLicenseAccess(auth, id);
+  if (denied) return denied;
 
   let body: unknown;
   try {

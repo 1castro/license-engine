@@ -3,6 +3,14 @@
 import { useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { ReleaseActivationButton } from './release-button';
 
 export interface PortalActivationItem {
@@ -54,6 +62,8 @@ export function PortalActivationsView({
     (type) => seatByType.has(type) || (byType.get(type)?.length ?? 0) > 0,
   );
 
+  const [activeType, setActiveType] = useState<string>(shownTypes[0] ?? '');
+
   if (activations.length === 0) {
     return (
       <p className="rounded border border-neutral-200 bg-white p-4 text-sm text-neutral-500">
@@ -62,28 +72,48 @@ export function PortalActivationsView({
     );
   }
 
+  // Guard against a stale activeType (e.g. if the shown types ever change).
+  const currentType = shownTypes.some((t) => t === activeType) ? activeType : shownTypes[0];
+
   return (
-    <div className="space-y-6">
-      {shownTypes.map((type) => (
-        <PortalActivationGroup
-          key={type}
-          label={GROUP_LABEL[type] ?? type}
-          seat={seatByType.get(type)}
-          items={byType.get(type) ?? []}
-          releasable={RELEASABLE.has(type)}
-        />
-      ))}
+    <div className="space-y-4">
+      <div role="tablist" className="flex flex-wrap gap-1 border-b border-neutral-200">
+        {shownTypes.map((type) => {
+          const active = type === currentType;
+          return (
+            <button
+              key={type}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setActiveType(type)}
+              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                active
+                  ? 'border-neutral-900 text-neutral-900'
+                  : 'border-transparent text-neutral-500 hover:text-neutral-800'
+              }`}
+            >
+              {GROUP_LABEL[type] ?? type}
+            </button>
+          );
+        })}
+      </div>
+
+      <PortalActivationGroup
+        key={currentType}
+        seat={seatByType.get(currentType)}
+        items={byType.get(currentType) ?? []}
+        releasable={RELEASABLE.has(currentType)}
+      />
     </div>
   );
 }
 
 function PortalActivationGroup({
-  label,
   seat,
   items,
   releasable,
 }: {
-  label: string;
   seat: PortalSeatItem | undefined;
   items: PortalActivationItem[];
   releasable: boolean;
@@ -106,73 +136,87 @@ function PortalActivationGroup({
   const visible = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
   return (
-    <section className="space-y-2">
-      <div className="flex items-baseline justify-between border-b border-neutral-200 pb-1">
-        <h2 className="text-sm font-semibold text-neutral-900">{label}</h2>
-        {seat && (
-          <span className="text-sm font-medium text-neutral-600">
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {seat ? (
+          <p className="text-sm font-medium text-neutral-600">
             {seat.used} von {seat.max ?? '∞'} Plätzen belegt
-          </span>
+          </p>
+        ) : (
+          <span />
+        )}
+        {items.length > SEARCH_THRESHOLD && (
+          <Input
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(0);
+            }}
+            placeholder="Suchen (Name oder Kürzel)…"
+            className="max-w-xs"
+          />
         )}
       </div>
 
-      {items.length > SEARCH_THRESHOLD && (
-        <Input
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPage(0);
-          }}
-          placeholder="Suchen (Name oder Kürzel)…"
-          className="max-w-xs"
-        />
-      )}
-
       {visible.length === 0 ? (
-        <p className="px-1 py-2 text-sm text-neutral-400">
+        <p className="rounded border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-400">
           {query.trim() === '' ? 'Kein Platz belegt.' : 'Keine Treffer.'}
         </p>
       ) : (
-        <ul className="space-y-2">
-          {visible.map((a) => (
-            <li
-              key={a.id}
-              className="flex items-start justify-between rounded border border-neutral-200 bg-white p-4 text-sm"
-            >
-              <div>
-                <p className="font-medium">
-                  {a.displayName ?? <span className="text-neutral-500">(ohne Name)</span>}
-                  {a.identifier && (
-                    <span className="ml-2 font-mono text-xs font-normal text-neutral-500">
-                      {a.identifier}
+        <div className="rounded-lg border border-neutral-200 bg-white">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Kürzel</TableHead>
+                <TableHead>Aktiv seit</TableHead>
+                <TableHead>Zuletzt aktiv</TableHead>
+                <TableHead>Status</TableHead>
+                {releasable && <TableHead className="text-right">Aktion</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visible.map((a) => (
+                <TableRow key={a.id}>
+                  <TableCell className="font-medium">
+                    {a.displayName ?? <span className="text-neutral-500">(ohne Name)</span>}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs text-neutral-500">
+                    {a.identifier ?? <span className="text-neutral-300">—</span>}
+                  </TableCell>
+                  <TableCell className="text-neutral-600">
+                    {new Date(a.activatedAt).toLocaleDateString('de-DE')}
+                  </TableCell>
+                  <TableCell className="text-neutral-600">
+                    {new Date(a.lastSeenAt).toLocaleDateString('de-DE')}
+                  </TableCell>
+                  <TableCell>
+                    <span
+                      className={`rounded px-2 py-1 text-xs font-medium ${
+                        a.status === 'active'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-neutral-200 text-neutral-700'
+                      }`}
+                    >
+                      {a.status === 'active' ? 'Aktiv' : 'Freigegeben'}
                     </span>
+                  </TableCell>
+                  {releasable && (
+                    <TableCell className="text-right">
+                      {a.status === 'active' ? (
+                        <ReleaseActivationButton activationId={a.id} />
+                      ) : a.releasedAt ? (
+                        <span className="text-xs text-neutral-400">
+                          freigegeben {new Date(a.releasedAt).toLocaleDateString('de-DE')}
+                        </span>
+                      ) : null}
+                    </TableCell>
                   )}
-                </p>
-                <p className="mt-1 text-xs text-neutral-500">
-                  Aktiv seit {new Date(a.activatedAt).toLocaleDateString('de-DE')}
-                  {' · '}zuletzt aktiv {new Date(a.lastSeenAt).toLocaleDateString('de-DE')}
-                  {a.releasedAt && (
-                    <> · freigegeben {new Date(a.releasedAt).toLocaleDateString('de-DE')}</>
-                  )}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span
-                  className={`rounded px-2 py-1 text-xs font-medium ${
-                    a.status === 'active'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-neutral-200 text-neutral-700'
-                  }`}
-                >
-                  {a.status === 'active' ? 'Aktiv' : 'Freigegeben'}
-                </span>
-                {releasable && a.status === 'active' && (
-                  <ReleaseActivationButton activationId={a.id} />
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       {pageCount > 1 && (

@@ -38,8 +38,8 @@ Folgende Punkte sind beim Design der License Engine zwingend zu berücksichtigen
 - Zentraler Multi-Product-Service. EIN Server verwaltet Lizenzen für alle Produkte.
 - Hybrid-Validierung: Client aktiviert online → erhält signiertes JWT → validiert danach offline → periodischer Re-Check beim Server.
 - Token-Format: JWT mit Ed25519-Signatur. Public Key wird mit dem SDK verteilt, Private Key bleibt serverseitig. Key-Rotation muss vorgesehen sein.
-- Re-Check-Intervall: Default 24h, konfigurierbar pro Produkt.
-- **JWT-Lifetime + Grace Period:** Default `exp = 7 Tage`, Re-Check alle 24h, Grace = `exp`. Bei Server-Unerreichbarkeit darf der Client bis zum Ablauf von `exp` weiter validieren, danach harter Validation-Failure. `exp` und `recheckIntervalHours` pro Produkt konfigurierbar. Refresh-Token-Modell bleibt optional als `revocationStrategy = refresh` für Produkte mit Bedarf nach schnellerem Widerruf.
+- Re-Check-Intervall: Default 12h, konfigurierbar pro Produkt.
+- **JWT-Lifetime + Grace Period:** Default `exp = 48h`, Re-Check alle 12h, Grace = `exp`. Bei Server-Unerreichbarkeit darf der Client bis zum Ablauf von `exp` weiter validieren, danach harter Validation-Failure. Kurze Defaults, damit ein Widerruf/Ablauf schnell greift (online ≤12h, Offline-Grace ≤48h); `exp` und `recheckIntervalHours` pro Produkt konfigurierbar (z.B. länger für offline-tolerante Desktop-Apps). Refresh-Token-Modell bleibt optional als `revocationStrategy = refresh` für Produkte mit Bedarf nach noch schnellerem Widerruf (Schema vorhanden, noch nicht implementiert).
 
 ### License-Key-Format
 - Endkunden-sichtbarer Lizenzschlüssel: `TROP-XXXX-XXXX-XXXX-XXXX` (4 Gruppen á 4 Zeichen, alphanumerisch, eine Position pro Gruppe als CRC-/Damm-Checksum-Char).
@@ -86,7 +86,7 @@ Eine `BindingPolicy` pro Lizenz definiert: welche Bindungstypen sind Pflicht, wi
 
 ### Widerruf
 - Pro Produkt konfigurierbar via `revocationStrategy`.
-- Default: greift beim nächsten Re-Check (24h-Granularität).
+- Default: greift beim nächsten Re-Check (12h-Granularität).
 - Erweiterbar auf Refresh-Token-Strategie pro Produkt, falls schnellerer Widerruf gewünscht.
 
 ### Audit-Logging
@@ -107,7 +107,7 @@ Eine `BindingPolicy` pro Lizenz definiert: welche Bindungstypen sind Pflicht, wi
 - Monorepo (pnpm Workspaces): `apps/server`, `packages/sdk-js`, `packages/shared-types`
 
 ## Datenmodell (initialer Entwurf, im Verlauf zu verfeinern)
-- `Product`: id, slug, name, featureCatalog (JSON), revocationStrategy, signingKeyId, recheckIntervalHours, jwtLifetimeHours (default 168 = 7 Tage), licenseKeyPrefix (default `TROP`)
+- `Product`: id, slug, name, featureCatalog (JSON), revocationStrategy, signingKeyId, recheckIntervalHours (default 12), jwtLifetimeHours (default 48), licenseKeyPrefix (default `TROP`)
 - `SigningKey`: id, productId (nullable für globalen Default-Key), publicKey, privateKeyEncrypted, algorithm (`Ed25519`), createdAt, rotatedAt, isActive
 - `Customer`: id, email, name, company (nullable), notes, externalRef (nullable, indiziert), externalSource (nullable, z.B. `stripe`|`paddle`|`manual`), createdAt
 - `License`: id, customerId, productId, licenseKey (UNIQUE, Format `TROP-XXXX-XXXX-XXXX-XXXX` mit Checksum), type (`subscription`|`perpetual`), expiresAt (nullable), featureFlags (JSON), bindingPolicy (JSON), status (`active`|`revoked`|`expired`), revokedAt, revocationReason, externalRef (nullable, indiziert), externalSource (nullable), createdAt

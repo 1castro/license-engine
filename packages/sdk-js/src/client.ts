@@ -3,6 +3,7 @@ import { verifyLicenseToken } from './verify';
 import { normalizeLicenseKey, validateLicenseKey } from './license-key';
 import {
   BindingMismatchError,
+  BindingsReleasedError,
   LicenseExpiredError,
   LicenseInvalidKeyError,
   LicenseNotActiveError,
@@ -175,7 +176,14 @@ export function createLicenseClient(config: LicenseClientConfig): LicenseClient 
       );
     }
     if (!res.ok) {
-      await mapHttpError(res, 'recheck');
+      try {
+        await mapHttpError(res, 'recheck');
+      } catch (err) {
+        // The license is fine but every binding on this token was released
+        // (seat freed centrally). Drop the stale cache so the app re-activates.
+        if (err instanceof BindingsReleasedError) await clearState();
+        throw err;
+      }
     }
     const body = (await res.json()) as RecheckResponse;
     if (body.status === 'revoked') {
@@ -313,6 +321,7 @@ async function mapHttpError(res: Response, op: string): Promise<never> {
   const message = body.error?.message ?? `Request failed with status ${res.status}`;
 
   if (code === 'invalid_license_key') throw new LicenseInvalidKeyError(message);
+  if (code === 'bindings_released') throw new BindingsReleasedError(message);
   if (code === 'license_not_active') throw new LicenseNotActiveError(message);
   if (code.startsWith('binding_')) throw new BindingMismatchError(message);
   if (code === 'rate_limited') {

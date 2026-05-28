@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { authorizeAdminRoute, jsonError } from '@/lib/auth/admin-route-auth';
+import { authorizeAdminRoute, jsonError, requireAdminSession } from '@/lib/auth/admin-route-auth';
 import {
   ApiKeyLicenseNotFoundError,
+  ApiKeyScopeNotBindableError,
   apiKeyCreateSchema,
   createApiKey,
   listApiKeys,
@@ -10,23 +11,25 @@ import {
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// Tag 2: dedicated `apikeys:*` scopes are not yet defined; the admin UI session
-// is the primary path. We reuse `products:read`/`products:write` so an existing
-// admin-grade key can manage keys without inventing a scope we'd have to revisit.
-const READ_SCOPE = 'products:read' as const;
-const WRITE_SCOPE = 'products:write' as const;
+// API-key management is admin-session-only: a service key must never be able to
+// list, create or revoke keys (which would let it mint an unbound, higher-scoped
+// key and escalate past its own license binding). Enforced via requireAdminSession.
 
 export async function GET(req: Request) {
-  const auth = await authorizeAdminRoute(req, { requireScope: READ_SCOPE });
+  const auth = await authorizeAdminRoute(req);
   if (auth instanceof NextResponse) return auth;
+  const denied = requireAdminSession(auth);
+  if (denied) return denied;
 
   const apiKeys = await listApiKeys();
   return NextResponse.json({ apiKeys });
 }
 
 export async function POST(req: Request) {
-  const auth = await authorizeAdminRoute(req, { requireScope: WRITE_SCOPE });
+  const auth = await authorizeAdminRoute(req);
   if (auth instanceof NextResponse) return auth;
+  const denied = requireAdminSession(auth);
+  if (denied) return denied;
 
   let body: unknown;
   try {
@@ -45,6 +48,11 @@ export async function POST(req: Request) {
   } catch (err) {
     if (err instanceof ApiKeyLicenseNotFoundError) {
       return jsonError(400, 'license_not_found', 'licenseId references a non-existent license');
+    }
+    if (err instanceof ApiKeyScopeNotBindableError) {
+      return jsonError(400, 'scope_not_bindable', err.message, {
+        disallowedScopes: err.disallowedScopes,
+      });
     }
     throw err;
   }

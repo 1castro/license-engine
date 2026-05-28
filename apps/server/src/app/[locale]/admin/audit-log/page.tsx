@@ -21,6 +21,7 @@ export const dynamic = 'force-dynamic';
 const ACTOR_BADGE: Record<AuditActorType, 'default' | 'secondary' | 'outline'> = {
   admin: 'default',
   api_key: 'secondary',
+  customer: 'secondary',
   system: 'outline',
   anonymous: 'outline',
 };

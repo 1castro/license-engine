@@ -80,3 +80,13 @@ export const portalForgotLimiter = createInMemoryRateLimiter({
   capacity: 3,
   refillTokensPerMinute: 3,
 });
+
+/**
+ * Portal password setup/reset redemption: 10/min/IP-hash. The single-use tokens
+ * are 256-bit (brute-force is hopeless), but each call triggers an expensive
+ * Argon2 hash — the limiter caps that work as defence-in-depth against flooding.
+ */
+export const portalPasswordLimiter = createInMemoryRateLimiter({
+  capacity: 10,
+  refillTokensPerMinute: 10,
+});

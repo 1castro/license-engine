@@ -117,8 +117,12 @@ export async function getActiveSigningKey(productId: string): Promise<{
   kid: string;
   privateKey: KeyObject;
 }> {
+  // Deterministic pick: if two keys were ever active simultaneously (e.g. an
+  // interrupted rotation), the newest one wins — it matches the product's
+  // intended active key set during rotation.
   const key = await prisma.signingKey.findFirst({
     where: { productId, isActive: true },
+    orderBy: { createdAt: 'desc' },
   });
   if (!key) throw new ProductHasNoActiveSigningKeyError(productId);
 

@@ -7,6 +7,41 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [1.2.0] - 2026-05-28 — Portal-Self-Service & Seat-Verwaltbarkeit
+
+Aufbauend auf dem Seat-Management (1.1.0): die Verwaltung wird **laientauglich**
+und läuft zentral über das Kunden-Portal — integrierte Apps brauchen kein eigenes
+Lizenz-Panel. Das Integrations-Modell ist bewusst **universell** gehalten (für
+beliebige künftige Apps), der Fahrdienst ist nur das erste Beispiel.
+
+### Hinzugefügt
+- **Seat-Editor im Lizenz-Formular**: bindingPolicy wird pro Typ über
+  „erforderlich"-Häkchen + „max. Plätze"-Feld gepflegt (statt rohem JSON), mit
+  strikter serverseitiger Validierung.
+- **Aktivierungs-Ansicht** (Admin + Portal): nach Bindungstyp gruppiert, mit
+  prominentem Anzeigenamen, **Kürzel** als eigener Spalte (Member-ID o.ä.), Suche
+  und Paginierung pro Typ.
+- **Portal-Self-Service** für Kunden: Umschalten zwischen Bindungstypen über
+  **Tabs**, „Plätze"-Übersicht (belegt/max) oben in der Lizenz-Karte, Firmenname
+  im Header, Hinweis zum sorgsamen Umgang mit der Lizenznummer.
+- **Setup-Mail erneut senden** (für Kunden-Admins) aus dem Admin-UI.
+
+### Geändert
+- **„Zuletzt aktiv" (`lastSeenAt`) wird auch beim `recheck` aktualisiert** — die
+  Spalte spiegelt jetzt laufende Nutzung wider, nicht nur den letzten `activate`
+  (Granularität = Re-Check-Intervall). Kein zusätzliches Audit-Logging.
+- **Integrations-Leitfaden** (`docs/INTEGRATION.md`) auf das universelle Modell
+  geschärft: aktivitätsbasierte Seat-Belegung (Per-Request, nicht login-gebunden),
+  server-seitiger Token-Cache pro Binding, fail-closed bei Erst-Aktivierung,
+  metadata-Konvention (`value`=Anker, `displayName`, `identifier`).
+
+### Sicherheit
+- Die **Domain-Bindung** (feste App-Lizenz-Identität) kann im Portal nur angesehen,
+  **nicht** freigegeben werden — serverseitig erzwungen (403), nicht nur UI-seitig.
+- Layout-DB-Abfrage für den Header gegen DB-Ausfälle abgesichert (fail-safe).
+
+---
+
 ## [1.1.0] - 2026-05-28 — Seat-Management für App-Lizenzierung
 
 Grundlage, damit integrierte Apps ein Platz-Limit (Seats) nutzen, anzeigen und

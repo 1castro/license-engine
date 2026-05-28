@@ -34,7 +34,6 @@ export const AuditEventType = {
   // API-Key lifecycle
   ApiKeyCreated: 'apikey.created',
   ApiKeyRevoked: 'apikey.revoked',
-  ApiKeyUsed: 'apikey.used',
 
   // Signing keys & tokens
   SigningKeyCreated: 'signing_key.created',
@@ -42,6 +41,8 @@ export const AuditEventType = {
   TokenVerifyFailed: 'token.verify_failed',
 
   // Customer portal (self-service)
+  PortalLoginSuccess: 'portal.login.success',
+  PortalLoginFailure: 'portal.login.failure',
   PortalPasswordSet: 'portal.password_set',
   PortalPasswordReset: 'portal.password_reset',
   PortalSetupMailResent: 'portal.setup_mail_resent',

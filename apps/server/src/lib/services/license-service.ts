@@ -1,4 +1,5 @@
 import {
+  ActivationStatus,
   ExternalSource,
   LicenseStatus,
   LicenseType,
@@ -85,6 +86,31 @@ export class LicenseNotFoundError extends Error {
   }
 }
 
+export class LicenseCustomerNotFoundError extends Error {
+  constructor(public readonly customerId: string) {
+    super(`Customer not found: ${customerId}`);
+    this.name = 'LicenseCustomerNotFoundError';
+  }
+}
+
+export class FeatureFlagsNotInCatalogError extends Error {
+  constructor(public readonly unknownFlags: string[]) {
+    super(`Feature flags not in product catalog: ${unknownFlags.join(', ')}`);
+    this.name = 'FeatureFlagsNotInCatalogError';
+  }
+}
+
+/** Enforces the schema invariant that a license's featureFlags ⊆ Product.featureCatalog. */
+function assertFeatureFlagsInCatalog(featureFlags: string[], featureCatalog: unknown): void {
+  const catalog = Array.isArray(featureCatalog)
+    ? (featureCatalog as unknown[]).filter((v): v is string => typeof v === 'string')
+    : [];
+  const unknown = featureFlags.filter((f) => !catalog.includes(f));
+  if (unknown.length > 0) {
+    throw new FeatureFlagsNotInCatalogError(unknown);
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Service operations
 // -----------------------------------------------------------------------------
@@ -130,6 +156,16 @@ export async function createLicense(
   if (!product) {
     throw new ProductNotFoundError(input.productId);
   }
+  // Symmetric to the product check: surface a clean typed error instead of a
+  // raw FK violation when the customer doesn't exist.
+  const customer = await prisma.customer.findUnique({
+    where: { id: input.customerId },
+    select: { id: true },
+  });
+  if (!customer) {
+    throw new LicenseCustomerNotFoundError(input.customerId);
+  }
+  assertFeatureFlagsInCatalog(input.featureFlags, product.featureCatalog);
 
   const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
   const featureFlags = input.featureFlags as Prisma.InputJsonValue;
@@ -196,6 +232,15 @@ export async function updateLicense(
     data.expiresAt = input.expiresAt === null ? null : new Date(input.expiresAt);
   }
   if (input.featureFlags !== undefined) {
+    // Enforce featureFlags ⊆ the product's catalog. If the license doesn't
+    // exist, skip — the update below raises P2025 → 404 in the route.
+    const lic = await prisma.license.findUnique({
+      where: { id },
+      select: { product: { select: { featureCatalog: true } } },
+    });
+    if (lic) {
+      assertFeatureFlagsInCatalog(input.featureFlags, lic.product.featureCatalog);
+    }
     data.featureFlags = input.featureFlags as Prisma.InputJsonValue;
   }
   if (input.bindingPolicy !== undefined) {
@@ -227,13 +272,22 @@ export async function revokeLicense(
     throw new LicenseAlreadyRevokedError(id);
   }
 
-  const license = await prisma.license.update({
-    where: { id },
-    data: {
-      status: LicenseStatus.revoked,
-      revokedAt: new Date(),
-      revocationReason: reason,
-    },
+  // Revoke the license AND release its active seats in one transaction, so the
+  // seat usage immediately reflects reality (a revoked license occupies nothing).
+  const license = await prisma.$transaction(async (tx) => {
+    const updated = await tx.license.update({
+      where: { id },
+      data: {
+        status: LicenseStatus.revoked,
+        revokedAt: new Date(),
+        revocationReason: reason,
+      },
+    });
+    await tx.activation.updateMany({
+      where: { licenseId: id, status: ActivationStatus.active },
+      data: { status: ActivationStatus.released, releasedAt: new Date() },
+    });
+    return updated;
   });
   await writeAuditLog({
     eventType: AuditEventType.LicenseRevoked,

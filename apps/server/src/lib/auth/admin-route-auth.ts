@@ -96,6 +96,19 @@ export function enforceLicenseAccess(
   return null;
 }
 
+/**
+ * Restricts a route to interactive admin sessions — API-key actors are rejected.
+ * Use for self-administration endpoints (e.g. API-key management) so that a
+ * service key can never create or revoke keys and thereby escalate its own scope
+ * or shed its license binding.
+ */
+export function requireAdminSession(ctx: AdminAuthContext): NextResponse | null {
+  if (ctx.subject.kind !== 'admin') {
+    return jsonError(403, 'forbidden', 'Only an admin session may perform this action');
+  }
+  return null;
+}
+
 export function jsonError(
   status: number,
   code: string,

@@ -5,7 +5,7 @@ import { getEnv } from '../env';
 import { getLogger } from '../logger';
 import { type AuditEventType } from './event-types';
 
-export type AuditActorType = 'admin' | 'api_key' | 'system' | 'anonymous';
+export type AuditActorType = 'admin' | 'api_key' | 'customer' | 'system' | 'anonymous';
 
 export interface AuditLogInput {
   eventType: AuditEventType;

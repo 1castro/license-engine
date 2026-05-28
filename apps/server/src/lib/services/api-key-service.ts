@@ -3,7 +3,11 @@ import { z } from 'zod';
 import { prisma } from '../prisma';
 import { writeAuditLog, AuditEventType } from '../audit';
 import { generateApiKey } from '../auth/api-key';
-import { ALL_SCOPES, type ApiKeyScope } from '../auth/api-key-middleware';
+import {
+  ALL_SCOPES,
+  LICENSE_BOUND_ALLOWED_SCOPES,
+  type ApiKeyScope,
+} from '../auth/api-key-middleware';
 import type { AdminAuthContext } from '../auth/admin-route-auth';
 import { actorOf } from '../auth/admin-route-auth';
 
@@ -84,6 +88,16 @@ export class ApiKeyLicenseNotFoundError extends Error {
   }
 }
 
+export class ApiKeyScopeNotBindableError extends Error {
+  constructor(public readonly disallowedScopes: ApiKeyScope[]) {
+    super(
+      `A license-bound key may not hold these scopes: ${disallowedScopes.join(', ')}. ` +
+        `Allowed: ${LICENSE_BOUND_ALLOWED_SCOPES.join(', ')}.`,
+    );
+    this.name = 'ApiKeyScopeNotBindableError';
+  }
+}
+
 export async function createApiKey(
   input: ApiKeyCreateInput,
   ctx: AdminAuthContext,
@@ -97,6 +111,14 @@ export async function createApiKey(
     });
     if (!license) {
       throw new ApiKeyLicenseNotFoundError(input.licenseId);
+    }
+    // A bound key must not carry cross-tenant scopes (multi-tenant isolation):
+    // the binding only scopes license/activation access to its own license.
+    const disallowed = input.scopes.filter(
+      (s) => !(LICENSE_BOUND_ALLOWED_SCOPES as readonly string[]).includes(s),
+    );
+    if (disallowed.length > 0) {
+      throw new ApiKeyScopeNotBindableError(disallowed);
     }
   }
 

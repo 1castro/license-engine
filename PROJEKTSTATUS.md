@@ -1,10 +1,10 @@
 # PROJEKTSTATUS — License Engine
 
-**Aktueller Stand:** **LIVE in Produktion (v1.1.0).** Phase 1–6 feature-complete + gehärtet + Seat-Management (Phase A) für App-Lizenzierung. Deployed auf `188.245.95.60`, erreichbar unter **https://license.tropicsoft.de**.
+**Aktueller Stand:** **LIVE in Produktion (v1.2.0).** Phase 1–6 feature-complete + gehärtet + Seat-Management (Phase A) + Portal-Self-Service-Feinschliff + Voll-Audit-Härtung (Multi-Tenant-Isolation, Privilege-Escalation, Quota, Portal-Session-Trennung). Deployed auf `188.245.95.60`, erreichbar unter **https://license.tropicsoft.de**.
 
 **Letztes Update:** 2026-05-28
 
-**Nächster Schritt:** Erste reale App-Integration — Fahrdienst (PHP) gegen die Seat-API. Konzept + API-Vertrag: `docs/INTEGRATION.md`. App-Seite im Fahrdienst-Chat, Engine-Kontrolle hier.
+**Nächster Schritt:** Erste reale App-Integration — Fahrdienst (PHP) gegen die Seat-API. Konzept + API-Vertrag: `docs/INTEGRATION.md` (universelles Modell, Fahrdienst als Beispiel). App-Seite im Fahrdienst-Chat per kopierbarem Prompt, Engine-Kontrolle hier.
 
 ---
 
@@ -28,7 +28,7 @@
 - AuditLog-Writer mit IP-Hash via HMAC-SHA256 (stable Pseudonymisierung), Metadata-Scrubbing, fire-and-forget bei DB-Fehlern.
 - Admin-CRUD-UIs für Produkte, Kunden, Lizenzen, API-Keys (shadcn/ui + react-hook-form + Radix-Primitives). Forms POSTen an die Admin-API-Routes.
 - Admin-API unter `/api/admin/v1/*`: Products/Customers/Licenses/ApiKeys, Auth via Session ODER API-Key mit Scope-Check, **License- UND Customer-Create idempotent** über `(externalRef, externalSource)`.
-- Vitest mit **129 Tests grün** insgesamt (111 Server + 18 SDK).
+- Vitest: **132 Server- + 18 SDK-Tests grün**.
 - **Production-Härtung** (Audit-Runden 1–3): Damm-Checksum (Server+SDK), Customer.email UNIQUE, TOTP- + Portal-Token-atomic-consume, applyBindings in Transaktion mit Row-Lock + Status-Re-Check, Recheck-Binding-Filter (released raus, Enum-Whitelist), License-Lazy-Expire + Cron, Security-Header (HSTS/CSP/X-Frame), `TRUST_PROXY_HEADERS`, Body-Size-Cap, Health-Endpoint extern abgeschirmt, Portal-Cookie SameSite=Strict.
 - **Admin-UI**: Favicon (Schlüssel-Symbol) + Changelog-Modal (liest `CHANGELOG.md`, XSS-sicherer Renderer) in der Seitenleiste.
 - **Self-Service-Portal** (Phase 6): eigener Customer-Auth-Pfad (Email + Argon2-Passwort), separater JWT-Cookie `le_portal_session`, Setup-Mail beim Customer-Create (Auto-Hook), Forgot-/Reset-Flow mit single-use Tokens (Hash-only-Storage), Portal-UI unter `/portal/*` mit Lizenz-Übersicht + License-Detail + Activation-Release per Inline-Modal. Aktivierungen zeigen sprechenden Display-Namen (`Domain — Jans Laptop (Dev)`) statt nur Hash.
@@ -43,6 +43,7 @@
 - ~~SMTP-Adapter~~ — `SmtpMailSender` (nodemailer, mailcow) live.
 - ~~Multi-Stage-Dockerfile `runtime`-Target~~ — deployed (Build auf dem Server, kein Registry-Push nötig).
 - ~~Pre-Deploy-Audit + Härtung~~ — drei Audit-Runden, alle Blocker/Major gefixt.
+- ~~Voll-Audit über die gesamte App (v1.2.0, vor erster echter Integration)~~ — 3-Agenten-Audit + Komplett-Fix + Re-Audit + Fokus-Recheck, alles grün. Geschlossen: Multi-Tenant-Isolation auf allen Lizenz-Routen (`enforceLicenseAccess`), API-Key-Privilege-Escalation (Key-Verwaltung admin-session-only), Scope-Whitelist für gebundene Keys (`LICENSE_BOUND_ALLOWED_SCOPES`), Seat-Quota beim Reaktivieren, einheitliche 500-Hülle (v1-Routen), Produkt+Signing-Key transaktional, Portal-Session eigenes Secret + iss/aud + Invalidierung (`portalSessionsValidAfter`), Rate-Limit reset/setup, featureCatalog-Subset, kürzere Token-Defaults (12h/48h). Bewusst offen: `shared-types`-Zentralisierung (Refactor, kein Bug); gebundene Keys nur lizenz-/aktivierungs-bezogene Scopes (per Whitelist erzwungen).
 
 ## Backlog (priorisiert)
 1. **Erste Test-Lizenzierung** — eine Web-Applikation als reales Testobjekt anbinden (nächster Schritt mit Jan).

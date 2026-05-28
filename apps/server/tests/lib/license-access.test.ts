@@ -47,3 +47,24 @@ describe('enforceLicenseAccess (multi-tenant isolation)', () => {
     expect(res?.status).toBe(404);
   });
 });
+
+describe('requireAdminSession (API-key self-administration lockout)', () => {
+  it('allows an admin session', async () => {
+    const { requireAdminSession } = await import('../../src/lib/auth/admin-route-auth');
+    expect(requireAdminSession(adminCtx)).toBeNull();
+  });
+
+  it('rejects an unbound API key with 403', async () => {
+    const { requireAdminSession } = await import('../../src/lib/auth/admin-route-auth');
+    const res = requireAdminSession(apiKeyCtx(null));
+    expect(res).toBeInstanceOf(NextResponse);
+    expect(res?.status).toBe(403);
+  });
+
+  it('rejects a license-bound API key with 403', async () => {
+    const { requireAdminSession } = await import('../../src/lib/auth/admin-route-auth');
+    const res = requireAdminSession(apiKeyCtx('lic_fidibus'));
+    expect(res).toBeInstanceOf(NextResponse);
+    expect(res?.status).toBe(403);
+  });
+});

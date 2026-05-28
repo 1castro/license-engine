@@ -61,6 +61,7 @@ enum ActivationStatus {
 enum AuditActorType {
   admin
   api_key
+  customer
   system
   anonymous
 }
@@ -119,8 +120,11 @@ model Product {
   /// Catalog of features this product offers, as JSON array of feature IDs/names.
   featureCatalog       Json               @default("[]")
   revocationStrategy   RevocationStrategy @default(recheck)
-  recheckIntervalHours Int                @default(24)
-  jwtLifetimeHours     Int                @default(168)
+  /// Online clients pick up a revocation within this window; the offline grace
+  /// window equals jwtLifetimeHours. Kept short so a revoke/expire takes effect
+  /// quickly (defaults: 12h recheck, 48h max offline grace). Tunable per product.
+  recheckIntervalHours Int                @default(12)
+  jwtLifetimeHours     Int                @default(48)
   /// Prefix for license keys of this product. Default "TROP", configurable per product
   /// or per partner branding.
   licenseKeyPrefix     String             @default("TROP")
@@ -181,6 +185,10 @@ model Customer {
   emailVerifiedAt   DateTime?
   /// Bookkeeping for the portal session: last successful login.
   portalLastLoginAt DateTime?
+  /// Portal sessions (stateless JWTs) issued before this instant are rejected.
+  /// Bumped on password set/reset so an old session can't outlive a credential
+  /// change after a suspected account takeover.
+  portalSessionsValidAfter DateTime?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

@@ -1,6 +1,7 @@
 import { Prisma, RevocationStrategy, type Product } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../prisma';
+import { getLogger } from '../logger';
 import { writeAuditLog, AuditEventType } from '../audit';
 import { canonicalizePrefix } from '../license/license-key';
 import { generateAndStoreSigningKey } from '../signing/signing-key-service';
@@ -22,8 +23,11 @@ export const productCreateSchema = z.object({
   name: z.string().min(1).max(120),
   featureCatalog: z.array(z.string().min(1).max(64)).default([]),
   revocationStrategy: z.nativeEnum(RevocationStrategy).default('recheck'),
-  recheckIntervalHours: z.number().int().min(1).max(720).default(24),
-  jwtLifetimeHours: z.number().int().min(1).max(8760).default(168),
+  // Short defaults so a revoke/expire propagates quickly: online clients within
+  // ~12h (recheck), offline grace capped at 48h (= jwtLifetime). Tunable up to
+  // the maxima per product if a use case needs longer offline tolerance.
+  recheckIntervalHours: z.number().int().min(1).max(720).default(12),
+  jwtLifetimeHours: z.number().int().min(1).max(8760).default(48),
   licenseKeyPrefix: z.string().min(1).max(16).default('TROP'),
 });
 
@@ -64,6 +68,25 @@ export async function createProduct(
       licenseKeyPrefix: canonicalPrefix,
     },
   });
+
+  // Auto-provision an Ed25519 signing key. Without it the first activate would
+  // fail (nothing to sign with). If provisioning fails (e.g. KEK briefly
+  // unavailable), compensate by deleting the just-created product so we never
+  // leave a product that can never issue tokens — and only THEN audit creation.
+  try {
+    await generateAndStoreSigningKey({ id: product.id, slug: product.slug }, ctx);
+  } catch (err) {
+    await prisma.product.delete({ where: { id: product.id } }).catch((delErr) => {
+      // Compensation itself failed — surface it (never swallow silently) so the
+      // orphaned, key-less product gets noticed instead of silently breaking activate.
+      getLogger().error(
+        { event: 'product.compensation_failed', productId: product.id, err: delErr },
+        'Failed to delete product after signing-key provisioning error',
+      );
+    });
+    throw err;
+  }
+
   await writeAuditLog({
     eventType: AuditEventType.ProductCreated,
     ...actorOf(ctx),
@@ -72,10 +95,6 @@ export async function createProduct(
     metadata: { slug: product.slug, name: product.name },
     ip: ctx.ip,
   });
-
-  // Auto-provision an Ed25519 signing key for the new product. Without it the
-  // first activate call would fail because there's nothing to sign with.
-  await generateAndStoreSigningKey({ id: product.id, slug: product.slug }, ctx);
 
   // Re-read so the returned product has activeSigningKeyId populated.
   return (await prisma.product.findUniqueOrThrow({ where: { id: product.id } }));

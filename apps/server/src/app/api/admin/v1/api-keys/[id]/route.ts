@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { authorizeAdminRoute, jsonError } from '@/lib/auth/admin-route-auth';
+import { authorizeAdminRoute, jsonError, requireAdminSession } from '@/lib/auth/admin-route-auth';
 import {
   ApiKeyAlreadyRevokedError,
   ApiKeyNotFoundError,
@@ -16,8 +16,10 @@ interface RouteParams {
 // "Delete" semantics: API keys are never hard-deleted — DELETE revokes them so
 // that audit and lastUsedAt traces remain available.
 export async function DELETE(req: Request, { params }: RouteParams) {
-  const auth = await authorizeAdminRoute(req, { requireScope: 'products:write' });
+  const auth = await authorizeAdminRoute(req);
   if (auth instanceof NextResponse) return auth;
+  const denied = requireAdminSession(auth);
+  if (denied) return denied;
   const { id } = await params;
 
   try {

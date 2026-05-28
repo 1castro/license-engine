@@ -30,6 +30,18 @@ export class LicenseNotActiveError extends LicenseSdkError {
   }
 }
 
+/**
+ * Every binding on the cached token has been released server-side (e.g. the
+ * seat was freed centrally in the portal). The LICENSE itself is fine — the
+ * client must call `activate()` again to obtain a fresh seat/token. The SDK
+ * clears its cached state before throwing this.
+ */
+export class BindingsReleasedError extends LicenseSdkError {
+  constructor(message = 'All bindings for this token were released — re-activation required') {
+    super(message);
+  }
+}
+
 export class LicenseRevokedError extends LicenseSdkError {
   constructor(public readonly revokedAt?: Date | null) {
     super(

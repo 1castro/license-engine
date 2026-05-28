@@ -27,6 +27,20 @@ export const ALL_SCOPES: readonly ApiKeyScope[] = [
   'audit:read',
 ];
 
+/**
+ * Scopes a LICENSE-BOUND API key may hold. A binding only constrains license-
+ * and activation-level access to the key's own license (enforced per-route by
+ * enforceLicenseAccess). Cross-tenant scopes (customers/products/audit, and
+ * license create/write/revoke) are NOT meaningfully bindable — a "bound" key
+ * with such a scope could still enumerate or mutate other tenants. They are
+ * therefore refused at key-creation time for bound keys.
+ */
+export const LICENSE_BOUND_ALLOWED_SCOPES: readonly ApiKeyScope[] = [
+  'licenses:read',
+  'activations:read',
+  'activations:write',
+];
+
 export interface ApiKeyContext {
   apiKeyId: string;
   apiKeyName: string;

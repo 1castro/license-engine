@@ -53,7 +53,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   await writeAuditLog({
     eventType: AuditEventType.ActivationReleased,
-    actorType: 'system',
+    actorType: 'customer',
     actorId: session.customerId,
     targetType: 'Activation',
     targetId: activation.id,

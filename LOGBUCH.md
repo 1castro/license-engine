@@ -4,6 +4,38 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-05-28 — Portal-Self-Service-Feinschliff + Voll-Audit & Härtung (v1.2.0)
+
+### Teil 1 — Portal-Self-Service laientauglich (deployed)
+Strategische Festlegung: Seat-/Lizenzverwaltung läuft **zentral über das Kunden-Portal**, integrierte Apps bekommen kein eigenes Lizenz-Panel (SaaS-Standard, für alle künftigen Apps). Daher Portal aufgehübscht:
+- Aktivierungs-Ansicht (Portal): **Tabs** pro Bindungstyp (statt langem Scrollen), **Name + Kürzel als getrennte Tabellenspalten**, „Plätze"-Übersicht oben in der Lizenz-Karte, Firmenname im Header, Warnzeile zum sorgsamen Umgang mit der Lizenznummer. Domain read-only.
+- `recheck` bumpt jetzt `lastSeenAt` → „zuletzt aktiv" spiegelt laufende Nutzung (Granularität = Recheck-Intervall), kein Audit-Logging. Commit `26e1fb8` + Folge-Commits.
+- Vorab in dieser Session bereits: Seat-Editor im Lizenz-Formular, gruppierte Aktivierungs-Ansicht + Suche/Paginierung, Setup-Mail-Resend (Commits `873446c`–`26e1fb8`).
+
+### Teil 2 — Voll-Audit über die GESAMTE Anwendung (vor erster echter Integration)
+Auf Wunsch (Sicherheit vor Anbindung des ersten echten Mandanten) drei Voll-Audit-Agenten (Security/Logik/Code) über die ganze App. Kernbefund: Fundament solide (Crypto/JWT-Pinning, Activate-Row-Lock, Admin-Login, öffentliche Endpoints, app-agnostischer Kern), aber **2 Blocker + mehrere Majors** in der jüngsten Multi-Mandanten-API-Key-Schicht. Komplett-Fix-Batch (32 Dateien) umgesetzt:
+
+- **B1 (Blocker)** Multi-Tenant-Isolation: `enforceLicenseAccess` ergänzt auf `GET /licenses` (gebundener Key → nur eigene Lizenz), `GET/PATCH /licenses/[id]`, `revoke`.
+- **B2 (Blocker)** API-Key-Privilege-Escalation: API-Key-Verwaltung (`/api-keys`) nur noch per Admin-Session (`requireAdminSession`), API-Key-Aktoren 403.
+- **F1 (Major, vom Re-Audit gefunden)** + **F2**: gebundene Keys konnten via `POST /licenses` fremde Lizenzen erstellen bzw. mit cross-tenant-Scopes enumerieren → **Scope-Whitelist `LICENSE_BOUND_ALLOWED_SCOPES`** (nur `licenses:read`/`activations:read`/`activations:write`) bei Key-Erstellung + Defense-in-depth-Block in `POST /licenses`.
+- **Q (Major)** Seat-Limit umgehbar: Quota-Check beim Reaktivieren eines freigegebenen Slots (release+reactivate-Churn) — `applyBindings` prüft `maxPerType` jetzt vor beiden Zweigen.
+- **m6** einheitliche `500 internal_error`-Hülle auf activate/recheck/deactivate (SDK las rohe 500 sonst als license_not_active). **M3** Produkt+Signing-Key transaktional (Kompensation, Logging). **m5** deterministischer aktiver Signing-Key.
+- **Sec-M1** Portal-JWT eigenes, aus `NEXTAUTH_SECRET` per HMAC abgeleitetes Secret + `iss`/`aud`-Pinning. **Sec-M2** Rate-Limit auf reset/setup-password + Session-Invalidierung (`Customer.portalSessionsValidAfter`, gebumpt bei Passwort set/reset) + `emailVerifiedAt` bei Reset.
+- **Widerruf-Timing** (Design-Call): Default `jwtLifetimeHours` 168→**48**, `recheckIntervalHours` 24→**12** (online-Widerruf ≤12h, Offline-Grace ≤48h; pro Produkt tunebar). Bestehende Produkte behalten ihre Werte.
+- **SDK released-binding** (Design-Call): recheck-Fall „alle Bindings freigegeben" liefert eigenen Code `bindings_released`; SDK wirft `BindingsReleasedError` + räumt den Cache → App kann sauber neu aktivieren. Für REST-Apps (Fahrdienst): bei `bindings_released` einfach `activate` neu.
+- **featureCatalog** (Design-Call): `featureFlags` werden gegen `Product.featureCatalog` validiert (Subset, sonst 400). ODER-Bindung bleibt bewusst nicht implementiert (nur UND), dokumentiert.
+- **Minors**: customerId-Vorprüfung, Portal-Login-Audit-Events (`customer`-ActorType, DSGVO nur ipHash), revoke gibt Seats frei (Transaktion), ApiKeyUsed-Deadcode entfernt.
+
+**3 additive Migrationen**: `portalSessionsValidAfter` (nullable), Token-Default-Änderung (nur neue Produkte), `AuditActorType += customer`. **MÜSSEN vor dem App-Deploy laufen.**
+
+**Verifikation**: typecheck/lint grün, **132 Server- + 18 SDK-Tests grün** (+3 requireAdminSession-Negativtests), build grün. Re-Audit (3 Agenten) der Fixes: Logik + Code grün; Security grün bis auf F1/F2 → nachgefixt (Scope-Whitelist) + Fokus-Recheck.
+
+**Bewusst zurückgestellt**: `shared-types`-Zentralisierung (Wire-Typen sind heute konsistent; breiter Refactor ohne aktuellen Bug — nicht in den Security-Batch gezogen).
+
+**Offene Design-Grenze (dokumentiert, F2)**: Die Lizenz-Bindung wirkt nur auf Lizenz-/Aktivierungs-Routen. Gebundene Mandanten-Keys dürfen ausschließlich Scopes aus `LICENSE_BOUND_ALLOWED_SCOPES` erhalten (per Whitelist erzwungen) — niemals `customers:*`/`products:*`/`audit:read`.
+
+---
+
 ## 2026-05-28 — Phase A: Seat-Management für App-Lizenzierung (v1.1.0)
 
 Engine-Seite für seat-basierte App-Lizenzierung (erster Testfall Fahrdienst, account-basiert). Konzept: `docs/INTEGRATION.md`. Genehmigter Plan, in 6 Schritten umgesetzt.

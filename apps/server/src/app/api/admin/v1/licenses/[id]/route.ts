@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
-import { authorizeAdminRoute, jsonError } from '@/lib/auth/admin-route-auth';
+import { authorizeAdminRoute, enforceLicenseAccess, jsonError } from '@/lib/auth/admin-route-auth';
 import {
+  FeatureFlagsNotInCatalogError,
   getLicense,
   licenseUpdateSchema,
   updateLicense,
@@ -18,6 +19,8 @@ export async function GET(req: Request, { params }: RouteParams) {
   const auth = await authorizeAdminRoute(req, { requireScope: 'licenses:read' });
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
+  const denied = enforceLicenseAccess(auth, id);
+  if (denied) return denied;
 
   const license = await getLicense(id);
   if (!license) return jsonError(404, 'not_found', 'License not found');
@@ -28,6 +31,8 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   const auth = await authorizeAdminRoute(req, { requireScope: 'licenses:write' });
   if (auth instanceof NextResponse) return auth;
   const { id } = await params;
+  const denied = enforceLicenseAccess(auth, id);
+  if (denied) return denied;
 
   let body: unknown;
   try {
@@ -44,6 +49,11 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     const license = await updateLicense(id, parsed.data, auth);
     return NextResponse.json({ license });
   } catch (err) {
+    if (err instanceof FeatureFlagsNotInCatalogError) {
+      return jsonError(400, 'feature_flags_not_in_catalog', err.message, {
+        unknownFlags: err.unknownFlags,
+      });
+    }
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
       return jsonError(404, 'not_found', 'License not found');
     }

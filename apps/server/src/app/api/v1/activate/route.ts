@@ -34,6 +34,20 @@ function jsonError(status: number, code: string, message: string, details?: unkn
 
 export async function POST(req: Request) {
   const log = getLogger();
+  try {
+    return await handleActivate(req, log);
+  } catch (err) {
+    // Uniform 500 shape so the SDK/clients never get a raw HTML error they would
+    // misread (e.g. as license_not_active). Unexpected errors only.
+    log.error({ event: 'activate.internal_error', err }, 'Unhandled error during activation');
+    return jsonError(500, 'internal_error', 'Internal server error');
+  }
+}
+
+async function handleActivate(
+  req: Request,
+  log: ReturnType<typeof getLogger>,
+): Promise<NextResponse> {
   const ip = extractIp(req);
   const ipHashForLimit = hashIp(ip) ?? 'no-ip';
 

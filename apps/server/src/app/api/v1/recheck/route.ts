@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { ActivationStatus, BindingType, LicenseStatus, type License } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { extractIp, hashIp, writeAuditLog, AuditEventType } from '@/lib/audit';
+import { getLogger } from '@/lib/logger';
 import { recheckLimiter } from '@/lib/auth/rate-limit';
 import { getSeatUsage } from '@/lib/binding/activation-service';
 import { parseBindingPolicy } from '@/lib/binding/binding-policy';
@@ -27,6 +28,17 @@ function jsonError(status: number, code: string, message: string, details?: unkn
 }
 
 export async function POST(req: Request) {
+  const log = getLogger();
+  try {
+    return await handleRecheck(req);
+  } catch (err) {
+    // Uniform 500 shape so the SDK never misreads a raw HTML error.
+    log.error({ event: 'recheck.internal_error', err }, 'Unhandled error during recheck');
+    return jsonError(500, 'internal_error', 'Internal server error');
+  }
+}
+
+async function handleRecheck(req: Request): Promise<NextResponse> {
   const ip = extractIp(req);
   const ipHashForLimit = hashIp(ip) ?? 'no-ip';
 
@@ -159,6 +171,21 @@ export async function POST(req: Request) {
     });
     const stillActive = new Set(activeRows.map((r) => `${r.bindingType}|${r.bindingValueHash}`));
     activeBindings = tokenBindings.filter((b) => stillActive.has(`${b.type}|${b.hash}`));
+
+    // A recheck is a "Lebenszeichen": bump lastSeenAt for the still-active
+    // activations so the admin/portal "zuletzt aktiv" column reflects ongoing
+    // usage, not just the last activate() call. No audit log here — re-checks
+    // are intentionally not telemetered per CLAUDE.md.
+    if (activeBindings.length > 0) {
+      await prisma.activation.updateMany({
+        where: {
+          licenseId: license.id,
+          status: ActivationStatus.active,
+          OR: activeBindings.map((b) => ({ bindingType: b.type, bindingValueHash: b.hash })),
+        },
+        data: { lastSeenAt: new Date() },
+      });
+    }
   }
 
   // If the previous token carried bindings but every single one of them has
@@ -166,10 +193,13 @@ export async function POST(req: Request) {
   // a token. Issuing one would let a deactivated client keep validating until
   // exp — the intent of deactivate is exactly the opposite. Force re-activate.
   if (tokenHadBindings && activeBindings.length === 0) {
+    // Distinct from license_not_active: the LICENSE is fine, but every binding
+    // on this token was released (e.g. the seat was freed centrally). The client
+    // must re-activate rather than treat the license as dead.
     return jsonError(
       403,
-      'license_not_active',
-      'All bindings have been released for this token — call activate() again',
+      'bindings_released',
+      'All bindings for this token have been released — call activate() again',
     );
   }
 

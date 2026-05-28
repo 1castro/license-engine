@@ -10,6 +10,13 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+const SEAT_LABEL: Record<string, string> = {
+  account: 'Nutzer',
+  device: 'Geräte',
+  installation: 'Installationen',
+  domain: 'Domain',
+};
+
 export default async function PortalLicenseDetailPage({
   params,
 }: {
@@ -90,6 +97,27 @@ export default async function PortalLicenseDetailPage({
             </div>
           )}
         </dl>
+
+        {seats.length > 0 && (
+          <div className="mt-4 border-t border-neutral-100 pt-4">
+            <p className="text-xs uppercase text-neutral-500">Plätze</p>
+            <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              {seats.map((s) => (
+                <div key={s.type}>
+                  <span className="text-neutral-600">{SEAT_LABEL[s.type] ?? s.type}: </span>
+                  <span className="font-medium">
+                    {s.used} / {s.max ?? '∞'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <p className="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Behandeln Sie diese Lizenznummer wie ein Passwort: Wer sie kennt, kann die Lizenz
+          aktivieren. Geben Sie sie nicht an Unbefugte weiter.
+        </p>
       </div>
 
       <div className="space-y-3">

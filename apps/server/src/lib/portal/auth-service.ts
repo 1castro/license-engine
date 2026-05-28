@@ -159,7 +159,8 @@ export async function setInitialPassword(input: {
   const passwordHash = await hashPassword(input.password);
   const customer = await prisma.customer.update({
     where: { id: consumed.customerId },
-    data: { passwordHash, emailVerifiedAt: new Date() },
+    // Bump portalSessionsValidAfter so any pre-existing session is invalidated.
+    data: { passwordHash, emailVerifiedAt: new Date(), portalSessionsValidAfter: new Date() },
   });
   await writeAuditLog({
     eventType: AuditEventType.PortalPasswordSet,
@@ -191,7 +192,14 @@ export async function resetPassword(input: {
   const passwordHash = await hashPassword(input.password);
   const customer = await prisma.customer.update({
     where: { id: consumed.customerId },
-    data: { passwordHash },
+    // A successful reset proves email control (set emailVerifiedAt) and must
+    // invalidate any pre-existing session (bump portalSessionsValidAfter) — the
+    // reset is the exact moment an account-takeover would be remediated.
+    data: {
+      passwordHash,
+      emailVerifiedAt: new Date(),
+      portalSessionsValidAfter: new Date(),
+    },
   });
   await writeAuditLog({
     eventType: AuditEventType.PortalPasswordReset,

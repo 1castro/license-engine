@@ -112,6 +112,28 @@ export async function applyBindings(
         },
       });
 
+      // Quota gate. Skip only when re-seeing an already-active binding (it
+      // already holds its slot → idempotent). Both creating a new activation
+      // AND resurrecting a previously released slot re-occupy a seat, so both
+      // must be counted against maxPerType — otherwise a release+reactivate
+      // churn could push the active count past the limit.
+      const isReseenActive = existing?.status === ActivationStatus.active;
+      if (!isReseenActive) {
+        const max = maxActivationsFor(policy, b.type);
+        if (max !== null) {
+          const currentActive = await tx.activation.count({
+            where: { licenseId: license.id, bindingType: b.type, status: ActivationStatus.active },
+          });
+          if (currentActive >= max) {
+            throw new BindingPolicyViolationError(
+              'max_exceeded',
+              b.type,
+              `already ${currentActive} of ${max} active`,
+            );
+          }
+        }
+      }
+
       if (existing) {
         const refreshed = await tx.activation.update({
           where: { id: existing.id },
@@ -124,20 +146,6 @@ export async function applyBindings(
         });
         activations.push(refreshed);
         continue;
-      }
-
-      const max = maxActivationsFor(policy, b.type);
-      if (max !== null) {
-        const currentActive = await tx.activation.count({
-          where: { licenseId: license.id, bindingType: b.type, status: ActivationStatus.active },
-        });
-        if (currentActive >= max) {
-          throw new BindingPolicyViolationError(
-            'max_exceeded',
-            b.type,
-            `already ${currentActive} of ${max} active`,
-          );
-        }
       }
 
       const created = await tx.activation.create({

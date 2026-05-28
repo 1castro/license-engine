@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { BindingType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { extractIp, hashIp, writeAuditLog, AuditEventType } from '@/lib/audit';
+import { getLogger } from '@/lib/logger';
 import { activateLimiter } from '@/lib/auth/rate-limit';
 import { releaseActivation } from '@/lib/binding/activation-service';
 import {
@@ -27,6 +28,16 @@ function jsonError(status: number, code: string, message: string, details?: unkn
 }
 
 export async function POST(req: Request) {
+  const log = getLogger();
+  try {
+    return await handleDeactivate(req);
+  } catch (err) {
+    log.error({ event: 'deactivate.internal_error', err }, 'Unhandled error during deactivate');
+    return jsonError(500, 'internal_error', 'Internal server error');
+  }
+}
+
+async function handleDeactivate(req: Request): Promise<NextResponse> {
   const ip = extractIp(req);
   const ipHashForLimit = hashIp(ip) ?? 'no-ip';
   if (!activateLimiter.tryConsume(ipHashForLimit)) {
