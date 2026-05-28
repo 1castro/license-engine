@@ -229,18 +229,20 @@ export async function getSeatUsage(
   licenseId: string,
   policy: BindingPolicy,
 ): Promise<SeatInfo[]> {
-  const types = new Set<BindingType>([
-    ...(policy.required ?? []),
-    ...(Object.keys(policy.maxPerType ?? {}) as BindingType[]),
-  ]);
-  const result: SeatInfo[] = [];
-  for (const type of types) {
-    const used = await prisma.activation.count({
-      where: { licenseId, bindingType: type, status: ActivationStatus.active },
-    });
-    result.push({ type, used, max: maxActivationsFor(policy, type) });
-  }
-  return result;
+  const types = [
+    ...new Set<BindingType>([
+      ...(policy.required ?? []),
+      ...(Object.keys(policy.maxPerType ?? {}) as BindingType[]),
+    ]),
+  ];
+  return Promise.all(
+    types.map(async (type) => {
+      const used = await prisma.activation.count({
+        where: { licenseId, bindingType: type, status: ActivationStatus.active },
+      });
+      return { type, used, max: maxActivationsFor(policy, type) };
+    }),
+  );
 }
 
 // -----------------------------------------------------------------------------

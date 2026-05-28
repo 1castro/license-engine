@@ -95,21 +95,31 @@ Engine mit `binding_max_exceeded` (409) ab.
 
 ## 5. Engine-To-dos (vor der ersten Integration)
 
-⏳ **(1) Seat-Zahlen in der Antwort.** `activate`/`recheck` liefern `seatsUsed` +
-`seatsMax` (pro relevantem Binding-Typ), damit jede App „37 von 100 Plätzen"
-anzeigen kann.
+✅ **(1) Seat-Zahlen in der Antwort.** `activate`/`recheck` liefern ein
+`seats`-Array, ein Eintrag je policy-relevantem Binding-Typ, damit jede App
+„37 von 100 Plätzen" anzeigen kann:
+```json
+"seats": [ { "type": "account", "used": 37, "max": 100 },
+           { "type": "domain",  "used": 1,  "max": 1 } ]
+```
+`max: null` bedeutet unbegrenzt. Typen ohne `required`/`maxPerType` erscheinen
+nicht im Array.
 
-⏳ **(2) Admin-Aktivierungs-Verwaltung (zentral, für tropicsoft).** Im License-
-Admin-UI pro Lizenz die belegten Plätze sehen + einzeln freigeben. Existiert heute
-nur im Kunden-Portal, nicht im Admin.
+✅ **(2) Admin-Aktivierungs-Verwaltung (zentral, für tropicsoft).** Im License-
+Admin-UI unter `/admin/licenses/[id]/activations`: Seat-Auslastung + belegte
+Plätze sehen + einzeln freigeben (Inline-Modal).
 
-⏳ **(3) Service-API für Seat-Management (für das App-Admin-Panel).** Per API-Key
-abgesicherte Endpoints, damit das Admin-Panel einer App ihre eigenen Plätze
-**auflisten** (für die Übersicht) und **freigeben** kann. Freigeben gibt es bereits
-(`deactivate`); das **Auflisten** fehlt.
+✅ **(3) Service-API für Seat-Management (für das App-Admin-Panel).** Per API-Key
+(Scopes `activations:read` / `activations:write`) abgesicherte Endpoints:
+- `GET /api/admin/v1/licenses/{id}/activations` — Plätze auflisten + `seats`-Übersicht.
+- `POST /api/admin/v1/licenses/{id}/activations/{activationId}/release` — Platz freigeben.
+
+API-Keys können optional an **eine** Lizenz gebunden werden (`ApiKey.licenseId`):
+ein gebundener Key sieht/verwaltet nur seine eigene Lizenz (fremde → 404). So
+bekommt jeder Mandant einen isolierten Key.
 
 Punkte (1) + (3) sind **generisch** — jede künftige Seat-App (Kreuzliste, …)
-nutzt dieselbe API. Einmal in der Engine bauen, überall wiederverwendbar.
+nutzt dieselbe API. Einmal in der Engine gebaut, überall wiederverwendbar.
 
 ---
 

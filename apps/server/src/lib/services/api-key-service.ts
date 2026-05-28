@@ -77,10 +77,29 @@ export interface CreatedApiKey {
   plaintext: string;
 }
 
+export class ApiKeyLicenseNotFoundError extends Error {
+  constructor(public readonly licenseId: string) {
+    super(`License not found for api-key binding: ${licenseId}`);
+    this.name = 'ApiKeyLicenseNotFoundError';
+  }
+}
+
 export async function createApiKey(
   input: ApiKeyCreateInput,
   ctx: AdminAuthContext,
 ): Promise<CreatedApiKey> {
+  // Validate the optional license binding up front for a clean 400 instead of
+  // letting the FK constraint surface as an unhandled 500.
+  if (input.licenseId) {
+    const license = await prisma.license.findUnique({
+      where: { id: input.licenseId },
+      select: { id: true },
+    });
+    if (!license) {
+      throw new ApiKeyLicenseNotFoundError(input.licenseId);
+    }
+  }
+
   const generated = generateApiKey();
   const scopes = input.scopes as Prisma.InputJsonValue;
   const row = await prisma.apiKey.create({

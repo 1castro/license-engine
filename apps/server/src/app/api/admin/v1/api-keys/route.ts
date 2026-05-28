@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authorizeAdminRoute, jsonError } from '@/lib/auth/admin-route-auth';
 import {
+  ApiKeyLicenseNotFoundError,
   apiKeyCreateSchema,
   createApiKey,
   listApiKeys,
@@ -38,6 +39,13 @@ export async function POST(req: Request) {
     return jsonError(400, 'validation_error', 'Invalid api-key payload', parsed.error.format());
   }
 
-  const { apiKey, plaintext } = await createApiKey(parsed.data, auth);
-  return NextResponse.json({ apiKey, plaintext }, { status: 201 });
+  try {
+    const { apiKey, plaintext } = await createApiKey(parsed.data, auth);
+    return NextResponse.json({ apiKey, plaintext }, { status: 201 });
+  } catch (err) {
+    if (err instanceof ApiKeyLicenseNotFoundError) {
+      return jsonError(400, 'license_not_found', 'licenseId references a non-existent license');
+    }
+    throw err;
+  }
 }
