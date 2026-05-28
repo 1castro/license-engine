@@ -95,16 +95,15 @@ async function checkAuditLog(): Promise<CheckResult & { latestEventAgoSeconds?: 
 }
 
 export async function GET(req: Request) {
-  // Internal-only. The Docker HEALTHCHECK and any in-cluster monitoring reach
-  // this over localhost / the Docker network and carry NO x-forwarded-*.
-  // External requests arrive through the reverse proxy, which always sets
-  // x-forwarded-*; we answer those with 404 so no infrastructure internals
-  // (DB latency, mail host, key status) are visible from the internet without
-  // auth. The public API (`/api/v1/*`) and login pages stay reachable.
-  if (
-    req.headers.get('x-forwarded-for') !== null ||
-    req.headers.get('x-forwarded-host') !== null
-  ) {
+  // Internal-only. We gate on `x-forwarded-for`: the reverse proxy (NPM) always
+  // sets it for external requests and an attacker cannot strip it (nginx appends
+  // its own value). Internal callers — the Docker HEALTHCHECK over localhost and
+  // monitoring on the Docker network — do NOT carry it, so they pass.
+  //
+  // NB: do NOT gate on `x-forwarded-host` — Next.js sets that header itself even
+  // for localhost requests (URL construction), so it would 404 the internal
+  // healthcheck too. Only `x-forwarded-for` reliably marks a proxied request.
+  if (req.headers.get('x-forwarded-for') !== null) {
     return new NextResponse(null, { status: 404 });
   }
 
