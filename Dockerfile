@@ -16,11 +16,13 @@ WORKDIR /app
 
 # ------------------------------------------------------------ deps
 FROM base AS deps
-COPY pnpm-workspace.yaml package.json ./
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY apps/server/package.json apps/server/
 COPY packages/shared-types/package.json packages/shared-types/
 COPY packages/sdk-js/package.json packages/sdk-js/
-RUN pnpm install --frozen-lockfile=false
+# Frozen lockfile: the committed pnpm-lock.yaml is the single source of truth,
+# so the build is reproducible and fails loudly if package.json drifts from it.
+RUN pnpm install --frozen-lockfile
 
 # ------------------------------------------------------------ dev
 FROM deps AS dev
@@ -45,13 +47,17 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 WORKDIR /app
 
-# Next.js standalone output bundles the minimal node_modules it needs.
+# Next.js standalone output bundles the minimal node_modules it needs —
+# including the generated Prisma client and the linux-musl query engine
+# (traced from the pnpm store under node_modules/.pnpm/...). We therefore do
+# NOT copy node_modules/.prisma separately: that path does not exist in a pnpm
+# layout and the COPY would fail the build. The engine is already inside
+# .next/standalone.
 COPY --from=builder --chown=nextjs:nodejs /app/apps/server/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/server/.next/static ./apps/server/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/apps/server/public ./apps/server/public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/server/prisma ./apps/server/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/apps/server/messages ./apps/server/messages
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 
 USER nextjs
 EXPOSE 3000

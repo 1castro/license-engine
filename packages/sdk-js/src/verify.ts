@@ -71,8 +71,8 @@ export async function verifyLicenseToken(input: {
     return payload as unknown as LicenseTokenClaims;
   } catch (err) {
     // Use jose's typed error classes — message-regex would silently mis-classify
-    // when jose changes its wording. JWTExpired is a sub-class of
-    // JWTClaimValidationFailed, so order matters.
+    // when jose changes its wording. Check expired first so an expired token is
+    // reported as `expired` rather than caught by the audience branch.
     if (err instanceof joseErrors.JWTExpired) {
       throw new LicenseTokenInvalidError('expired', err.message);
     }

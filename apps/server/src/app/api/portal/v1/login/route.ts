@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { loginLimiter } from '@/lib/auth/rate-limit';
 import { loginBackoff } from '@/lib/auth/login-backoff';
 import { getLogger } from '@/lib/logger';
-import { extractIp } from '@/lib/audit';
+import { extractIp, hashIp } from '@/lib/audit';
 import {
   loginCustomer,
   loginSchema,
@@ -30,6 +30,8 @@ export async function POST(req: Request) {
     return jsonError(400, 'validation_error', 'Invalid login payload');
   }
   const ip = extractIp(req);
+  // Never log the raw IP — DSGVO. Logs and audit trail only ever see the hash.
+  const ipHash = hashIp(ip);
   const limiterKey = `portal:${parsed.data.email.toLowerCase()}`;
 
   if (!loginLimiter.tryConsume(limiterKey)) {
@@ -49,13 +51,13 @@ export async function POST(req: Request) {
       email: customer.email,
     });
     await setPortalSessionCookie(token, expiresAt);
-    log.info({ event: 'portal.login.success', customerId: customer.id, ip }, 'Portal login');
+    log.info({ event: 'portal.login.success', customerId: customer.id, ipHash }, 'Portal login');
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof PortalAuthError) {
       loginBackoff.recordFailure(limiterKey);
       log.warn(
-        { event: 'portal.login.fail', code: err.code, ip },
+        { event: 'portal.login.fail', code: err.code, ipHash },
         'Portal login failed',
       );
       return jsonError(401, err.code, err.message);

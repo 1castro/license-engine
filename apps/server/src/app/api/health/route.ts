@@ -94,8 +94,27 @@ async function checkAuditLog(): Promise<CheckResult & { latestEventAgoSeconds?: 
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const log = getLogger();
+
+  // Liveness probe (`?level=live`): only the process being up + the database
+  // being reachable. Used by the container HEALTHCHECK. The mail/signing-key/
+  // audit-log checks are READINESS concerns for monitoring (Uptime Kuma) and
+  // must NOT turn the container unhealthy — otherwise an unreachable SMTP host
+  // or a fresh deploy with zero products would fail every container start.
+  const level = new URL(req.url).searchParams.get('level');
+  if (level === 'live') {
+    const database = await checkDb();
+    return NextResponse.json(
+      {
+        status: database.ok ? 'ok' : 'degraded',
+        uptimeSeconds: Math.round(process.uptime()),
+        checks: { database },
+      },
+      { status: database.ok ? 200 : 503 },
+    );
+  }
+
   const [database, kek, signingKeys, auditLog, mail] = await Promise.all([
     checkDb(),
     checkKek(),

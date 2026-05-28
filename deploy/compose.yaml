@@ -1,0 +1,128 @@
+# =============================================================================
+# License Engine — Production Compose-Stack
+#
+# Deployed auf 188.245.95.60 als:
+#   Stack:   /opt/stacks/license-engine/compose.yaml  (+ .env, chmod 600)
+#   Code:    /opt/license-engine/code/                (per deploy.sh rsynct)
+#
+# Topologie: 2 Container in EINEM Stack
+#   - license-engine      Next.js (standalone), kein Host-Port, nur reverse-proxy
+#   - license-engine-db   PostgreSQL 16, nur internes Netz, eigenes Volume
+#
+# Zugriff von außen ausschließlich über NGX Proxy Manager:
+#   license.tropicsoft.de  ->  http://license-engine:3000
+#
+# Migrations laufen als one-shot `license-engine-migrate` (builder-Stage, hat
+# die Prisma-CLI) und müssen erfolgreich durchlaufen, bevor die App startet.
+# =============================================================================
+
+services:
+  license-engine-db:
+    image: postgres:16-alpine
+    container_name: license-engine-db
+    restart: unless-stopped
+    # 30s reicht Postgres für einen sauberen Shutdown-Checkpoint (Default 10s
+    # kann mitten im Checkpoint SIGKILL provozieren).
+    stop_grace_period: 30s
+    environment:
+      POSTGRES_USER: license_engine
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD muss gesetzt sein}
+      POSTGRES_DB: license_engine
+    volumes:
+      - license-engine-db-data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U license_engine -d license_engine']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  # One-shot: `prisma migrate deploy` gegen die DB. Nutzt den builder-Stage,
+  # weil das schlanke runtime-Image keine Prisma-CLI enthält. Läuft bei jedem
+  # `up` erneut — migrate deploy ist idempotent (bereits angewandte Migrations
+  # werden übersprungen).
+  license-engine-migrate:
+    build:
+      context: /opt/license-engine/code
+      dockerfile: Dockerfile
+      target: builder
+    image: license-engine-builder:latest
+    restart: 'no'
+    depends_on:
+      license-engine-db:
+        condition: service_healthy
+    # env_file gibt dem Service auch ENCRYPTION_KEY/SMTP/... — `prisma migrate
+    # deploy` braucht nur DATABASE_URL (unten gesetzt), aber der einmalige
+    # admin:bootstrap-Lauf (via `docker compose run`) nutzt denselben Service
+    # und braucht ENCRYPTION_KEY + NEXTAUTH_SECRET. Schadet migrate nicht.
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://license_engine:${POSTGRES_PASSWORD}@license-engine-db:5432/license_engine?schema=public
+    command: ['pnpm', '--filter', '@license-engine/server', 'prisma:migrate:deploy']
+    networks:
+      - internal
+
+  license-engine:
+    build:
+      context: /opt/license-engine/code
+      dockerfile: Dockerfile
+      target: runtime
+    image: license-engine:latest
+    container_name: license-engine
+    restart: unless-stopped
+    stop_grace_period: 20s
+    depends_on:
+      license-engine-db:
+        condition: service_healthy
+      license-engine-migrate:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      # DB-Host ist der Service-Name im internen Netz. Überschreibt eine evtl.
+      # in .env stehende DATABASE_URL, damit kein localhost-Fehler möglich ist.
+      DATABASE_URL: postgresql://license_engine:${POSTGRES_PASSWORD}@license-engine-db:5432/license_engine?schema=public
+    # Kein Host-Port-Binding: NGX Proxy Manager läuft im selben `reverse-proxy`-
+    # Netz und routet via Container-DNS `license-engine:3000`.
+    expose:
+      - '3000'
+    networks:
+      - internal
+      - reverse-proxy
+    healthcheck:
+      # Liveness only (process up + DB reachable). The full /api/health readiness
+      # check (mail, signing keys, audit log) is for monitoring, not the container
+      # gate — see api/health/route.ts.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:3000/api/health?level=live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+volumes:
+  license-engine-db-data:
+
+networks:
+  # Internes Netz nur für App <-> DB. Nicht von außen erreichbar.
+  internal:
+    driver: bridge
+  # Geteiltes Netz mit dem NGX Proxy Manager (extern angelegt).
+  reverse-proxy:
+    external: true

@@ -1,6 +1,13 @@
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import createNextIntlPlugin from 'next-intl/plugin';
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
+
+// Monorepo root, two levels up from apps/server. Required so `output: standalone`
+// traces hoisted workspace node_modules (incl. the Prisma engine) from the
+// pnpm workspace root rather than just apps/server.
+const workspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '../../');
 
 // Tight CSP: same-origin scripts/styles, inline allowed (Next.js + Tailwind
 // inline css), no framing, no plugins. Tighten further once we know which
@@ -39,6 +46,7 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   output: 'standalone',
+  outputFileTracingRoot: workspaceRoot,
   experimental: {
     serverComponentsExternalPackages: ['@node-rs/argon2', 'pino', 'pino-pretty'],
   },
