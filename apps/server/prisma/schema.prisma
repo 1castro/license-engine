@@ -95,11 +95,17 @@ model ApiKey {
   keyHash    String    @unique
   /// Scopes as JSON string array, e.g. ["licenses:write", "licenses:revoke"].
   scopes     Json      @default("[]")
+  /// Optional binding to a single license. When set, the key may only read/manage
+  /// that license's activations (multi-tenant isolation — a tenant's key can't
+  /// see other tenants). Null = unrestricted (tropicsoft-internal admin key).
+  licenseId  String?
+  license    License?  @relation(fields: [licenseId], references: [id], onDelete: SetNull)
   createdAt  DateTime  @default(now())
   lastUsedAt DateTime?
   revokedAt  DateTime?
 
   @@index([revokedAt])
+  @@index([licenseId])
 }
 
 // -----------------------------------------------------------------------------
@@ -237,6 +243,7 @@ model License {
   updatedAt DateTime @updatedAt
 
   activations Activation[]
+  apiKeys     ApiKey[]
 
   @@unique([externalSource, externalRef], name: "externalRef_unique")
   @@index([customerId])

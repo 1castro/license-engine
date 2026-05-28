@@ -10,6 +10,8 @@ export type ApiKeyScope =
   | 'licenses:read'
   | 'licenses:write'
   | 'licenses:revoke'
+  | 'activations:read'
+  | 'activations:write'
   | 'audit:read';
 
 export const ALL_SCOPES: readonly ApiKeyScope[] = [
@@ -20,6 +22,8 @@ export const ALL_SCOPES: readonly ApiKeyScope[] = [
   'licenses:read',
   'licenses:write',
   'licenses:revoke',
+  'activations:read',
+  'activations:write',
   'audit:read',
 ];
 
@@ -27,6 +31,8 @@ export interface ApiKeyContext {
   apiKeyId: string;
   apiKeyName: string;
   scopes: ApiKeyScope[];
+  /** When set, the key is restricted to this single license (multi-tenant). */
+  licenseId: string | null;
 }
 
 /**
@@ -85,7 +91,7 @@ export async function authenticateApiKey(
 
   const scopes = parseScopes(row.scopes);
 
-  return { apiKeyId: row.id, apiKeyName: row.name, scopes };
+  return { apiKeyId: row.id, apiKeyName: row.name, scopes, licenseId: row.licenseId };
 }
 
 /** Parses the JSON-serialized scopes column into a typed array, dropping unknowns. */

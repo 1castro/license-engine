@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Ban, MoreHorizontal, Pencil } from 'lucide-react';
+import { Ban, MoreHorizontal, Pencil, Users } from 'lucide-react';
 
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ export function LicenseRowActions({
 }) {
   const t = useTranslations('common');
   const tLicenses = useTranslations('licenses');
+  const tActivations = useTranslations('activations');
   const [open, setOpen] = useState(false);
 
   return (
@@ -41,6 +42,12 @@ export function LicenseRowActions({
             <Link href={`/admin/licenses/${licenseId}/edit`}>
               <Pencil className="mr-2 h-4 w-4" />
               {t('edit')}
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href={`/admin/licenses/${licenseId}/activations`}>
+              <Users className="mr-2 h-4 w-4" />
+              {tActivations('title')}
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem

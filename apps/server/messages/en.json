@@ -150,6 +150,9 @@
     "createNew": "Create API key",
     "createTitle": "Create API key",
     "scopesHint": "Select at least one scope.",
+    "licenseBindingLabel": "Bind to license (optional)",
+    "licenseBindingPlaceholder": "License ID (empty = unrestricted)",
+    "licenseBindingHint": "When set, the key may only read/manage activations of this single license. Leave empty for an unrestricted admin key.",
     "plaintextWarning": "This key will not be shown again. Please save it securely.",
     "copyToClipboard": "Copy to clipboard",
     "copied": "Copied",
@@ -158,6 +161,19 @@
     "revokeTitle": "Revoke API key",
     "revokeConfirm": "Really revoke API key \"{name}\"? All callers immediately lose access.",
     "errorAlreadyRevoked": "This API key is already revoked."
+  },
+  "activations": {
+    "title": "Activations",
+    "empty": "This license has no activations yet.",
+    "hashLabel": "Hash",
+    "activatedAt": "Activated",
+    "lastSeen": "Last seen",
+    "releasedAt": "Released",
+    "statusActive": "Active",
+    "statusReleased": "Released",
+    "release": "Release",
+    "releaseTitle": "Release seat",
+    "releaseConfirm": "Release this activation? The occupied seat will be freed; the device/user must re-activate."
   },
   "auditLog": {
     "title": "Audit log",

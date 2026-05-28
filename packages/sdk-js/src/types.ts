@@ -14,16 +14,32 @@ export interface BindingInput {
   metadata?: Record<string, unknown>;
 }
 
+/** Seat usage per binding type (e.g. "37 of 100 account seats used"). */
+export interface SeatInfo {
+  type: BindingType;
+  used: number;
+  /** Configured cap, or null if unlimited. */
+  max: number | null;
+}
+
 /** Server-side `/api/v1/activate` response. */
 export interface ActivateResponse {
   token: string;
   expiresAt: string; // ISO timestamp
   recheckIntervalHours: number;
+  /** Seat usage for the binding types governed by the license policy. */
+  seats?: SeatInfo[];
 }
 
 /** Server-side `/api/v1/recheck` response. */
 export type RecheckResponse =
-  | { status: 'active'; token: string; expiresAt: string; recheckIntervalHours: number }
+  | {
+      status: 'active';
+      token: string;
+      expiresAt: string;
+      recheckIntervalHours: number;
+      seats?: SeatInfo[];
+    }
   | { status: 'revoked'; revokedAt: string | null }
   | { status: 'expired' };
 

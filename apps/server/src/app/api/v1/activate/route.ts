@@ -8,11 +8,12 @@ import { activateLimiter } from '@/lib/auth/rate-limit';
 import { normalizeLicenseKey } from '@/lib/license/license-key';
 import {
   applyBindings,
+  getSeatUsage,
   incomingBindingSchema,
   LicenseStateChangedError,
   MAX_BINDINGS_PER_ACTIVATE,
 } from '@/lib/binding/activation-service';
-import { BindingPolicyViolationError } from '@/lib/binding/binding-policy';
+import { BindingPolicyViolationError, parseBindingPolicy } from '@/lib/binding/binding-policy';
 import { signLicenseToken } from '@/lib/token/token-service';
 
 export const dynamic = 'force-dynamic';
@@ -149,9 +150,12 @@ export async function POST(req: Request) {
     });
   }
 
+  const seats = await getSeatUsage(license.id, parseBindingPolicy(license.bindingPolicy));
+
   return NextResponse.json({
     token: signed.token,
     expiresAt: signed.expiresAt.toISOString(),
     recheckIntervalHours: license.product.recheckIntervalHours,
+    seats,
   });
 }

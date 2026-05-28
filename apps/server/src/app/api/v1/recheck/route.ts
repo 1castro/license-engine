@@ -4,6 +4,8 @@ import { ActivationStatus, BindingType, LicenseStatus, type License } from '@pri
 import { prisma } from '@/lib/prisma';
 import { extractIp, hashIp, writeAuditLog, AuditEventType } from '@/lib/audit';
 import { recheckLimiter } from '@/lib/auth/rate-limit';
+import { getSeatUsage } from '@/lib/binding/activation-service';
+import { parseBindingPolicy } from '@/lib/binding/binding-policy';
 import {
   signLicenseToken,
   TokenVerificationError,
@@ -182,10 +184,13 @@ export async function POST(req: Request) {
     bindings: activeBindings.map((b) => ({ type: b.type, hash: b.hash })),
   });
 
+  const seats = await getSeatUsage(license.id, parseBindingPolicy(license.bindingPolicy));
+
   return NextResponse.json({
     status: 'active',
     token: signed.token,
     expiresAt: signed.expiresAt.toISOString(),
     recheckIntervalHours: product.recheckIntervalHours,
+    seats,
   });
 }

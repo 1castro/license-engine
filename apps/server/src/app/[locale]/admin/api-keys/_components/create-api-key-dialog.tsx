@@ -31,6 +31,8 @@ const ALL_SCOPES = [
   'licenses:read',
   'licenses:write',
   'licenses:revoke',
+  'activations:read',
+  'activations:write',
   'audit:read',
 ] as const;
 
@@ -42,6 +44,7 @@ export function CreateApiKeyDialog() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [scopes, setScopes] = useState<string[]>([]);
+  const [licenseId, setLicenseId] = useState('');
   const [plaintext, setPlaintext] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -50,6 +53,7 @@ export function CreateApiKeyDialog() {
   function reset() {
     setName('');
     setScopes([]);
+    setLicenseId('');
     setPlaintext(null);
     setCopied(false);
     setError(null);
@@ -61,10 +65,15 @@ export function CreateApiKeyDialog() {
     setSubmitting(true);
     setError(null);
     try {
+      const trimmedLicenseId = licenseId.trim();
       const res = await fetch('/api/admin/v1/api-keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), scopes }),
+        body: JSON.stringify({
+          name: name.trim(),
+          scopes,
+          ...(trimmedLicenseId.length > 0 ? { licenseId: trimmedLicenseId } : {}),
+        }),
       });
       if (res.ok) {
         const data: unknown = await res.json();
@@ -172,6 +181,17 @@ export function CreateApiKeyDialog() {
                   );
                 })}
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="api-key-license">{t('licenseBindingLabel')}</Label>
+              <Input
+                id="api-key-license"
+                value={licenseId}
+                onChange={(event) => setLicenseId(event.target.value)}
+                placeholder={t('licenseBindingPlaceholder')}
+                autoComplete="off"
+              />
+              <p className="text-xs text-neutral-500">{t('licenseBindingHint')}</p>
             </div>
             {error && (
               <Alert variant="destructive">

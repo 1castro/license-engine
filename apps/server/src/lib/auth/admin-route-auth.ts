@@ -10,7 +10,14 @@ import { extractIp } from '../audit';
 
 export type AdminAuthSubject =
   | { kind: 'admin'; userId: string; email: string; role: string }
-  | { kind: 'api_key'; apiKeyId: string; apiKeyName: string; scopes: ApiKeyScope[] };
+  | {
+      kind: 'api_key';
+      apiKeyId: string;
+      apiKeyName: string;
+      scopes: ApiKeyScope[];
+      /** When set, the key may only act on this single license. */
+      licenseId: string | null;
+    };
 
 export interface AdminAuthContext {
   subject: AdminAuthSubject;
@@ -63,11 +70,30 @@ export async function authorizeAdminRoute(
         apiKeyId: apiKey.apiKeyId,
         apiKeyName: apiKey.apiKeyName,
         scopes: apiKey.scopes,
+        licenseId: apiKey.licenseId,
       },
     };
   }
 
   return jsonError(401, 'unauthorized', 'Authentication required');
+}
+
+/**
+ * Enforces the API key's license binding. If the caller is a license-bound
+ * API key and the requested license is a different one, returns a 404 (we hide
+ * existence rather than 403). Admin sessions and unbound keys pass through.
+ * Returns null when access is allowed.
+ */
+export function enforceLicenseAccess(
+  ctx: AdminAuthContext,
+  licenseId: string,
+): NextResponse | null {
+  if (ctx.subject.kind === 'api_key' && ctx.subject.licenseId !== null) {
+    if (ctx.subject.licenseId !== licenseId) {
+      return jsonError(404, 'not_found', 'License not found');
+    }
+  }
+  return null;
 }
 
 export function jsonError(

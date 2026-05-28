@@ -150,6 +150,9 @@
     "createNew": "Neuen API-Key erstellen",
     "createTitle": "API-Key erstellen",
     "scopesHint": "Mindestens einen Scope auswählen.",
+    "licenseBindingLabel": "An Lizenz binden (optional)",
+    "licenseBindingPlaceholder": "License-ID (leer = unbeschränkt)",
+    "licenseBindingHint": "Wenn gesetzt, darf der Key nur die Aktivierungen dieser einen Lizenz lesen/verwalten. Leer lassen für einen unbeschränkten Admin-Key.",
     "plaintextWarning": "Dieser Schlüssel wird nicht erneut angezeigt. Bitte sicher speichern.",
     "copyToClipboard": "In Zwischenablage kopieren",
     "copied": "Kopiert",
@@ -158,6 +161,19 @@
     "revokeTitle": "API-Key widerrufen",
     "revokeConfirm": "API-Key „{name}\" wirklich widerrufen? Damit verlieren alle Aufrufer sofort den Zugriff.",
     "errorAlreadyRevoked": "Dieser API-Key ist bereits widerrufen."
+  },
+  "activations": {
+    "title": "Aktivierungen",
+    "empty": "Diese Lizenz hat noch keine Aktivierungen.",
+    "hashLabel": "Hash",
+    "activatedAt": "Aktiviert",
+    "lastSeen": "Zuletzt gesehen",
+    "releasedAt": "Freigegeben",
+    "statusActive": "Aktiv",
+    "statusReleased": "Freigegeben",
+    "release": "Freigeben",
+    "releaseTitle": "Platz freigeben",
+    "releaseConfirm": "Diese Aktivierung wirklich freigeben? Der belegte Platz wird frei; das Gerät/der Nutzer muss sich neu aktivieren."
   },
   "auditLog": {
     "title": "Audit-Log",

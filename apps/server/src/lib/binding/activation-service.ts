@@ -8,13 +8,14 @@ import {
 } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../prisma';
-import { writeAuditLog, AuditEventType } from '../audit';
+import { writeAuditLog, AuditEventType, type AuditActorType } from '../audit';
 import { hashBindingValue } from './binding-hash';
 import {
   assertRequiredBindingsProvided,
   BindingPolicyViolationError,
   maxActivationsFor,
   parseBindingPolicy,
+  type BindingPolicy,
 } from './binding-policy';
 
 export const incomingBindingSchema = z.object({
@@ -205,6 +206,92 @@ export async function releaseActivation(
   });
 
   return { released: true };
+}
+
+// -----------------------------------------------------------------------------
+// Seat usage (for activate/recheck responses + admin/app dashboards)
+// -----------------------------------------------------------------------------
+
+export interface SeatInfo {
+  type: BindingType;
+  /** Currently active activations of this type. */
+  used: number;
+  /** Configured cap, or null if unlimited. */
+  max: number | null;
+}
+
+/**
+ * Counts active activations per binding type that the policy actually governs
+ * (those listed in `required` or `maxPerType`). Lets an integrating app show
+ * "37 of 100 seats used". One COUNT per relevant type — typically 1–2 types.
+ */
+export async function getSeatUsage(
+  licenseId: string,
+  policy: BindingPolicy,
+): Promise<SeatInfo[]> {
+  const types = new Set<BindingType>([
+    ...(policy.required ?? []),
+    ...(Object.keys(policy.maxPerType ?? {}) as BindingType[]),
+  ]);
+  const result: SeatInfo[] = [];
+  for (const type of types) {
+    const used = await prisma.activation.count({
+      where: { licenseId, bindingType: type, status: ActivationStatus.active },
+    });
+    result.push({ type, used, max: maxActivationsFor(policy, type) });
+  }
+  return result;
+}
+
+// -----------------------------------------------------------------------------
+// Activation management (admin UI + service API)
+// -----------------------------------------------------------------------------
+
+/** All activations of a license, active first, newest-seen first. */
+export function listActivationsForLicense(licenseId: string): Promise<Activation[]> {
+  return prisma.activation.findMany({
+    where: { licenseId },
+    orderBy: [{ status: 'asc' }, { lastSeenAt: 'desc' }],
+  });
+}
+
+export type ReleaseByIdResult =
+  | { ok: false; reason: 'not_found' }
+  | { ok: true; released: boolean; alreadyReleased: boolean };
+
+/**
+ * Releases a single activation by id, scoped to the given license (the id must
+ * belong to that license — otherwise treated as not-found, so a caller can't
+ * probe foreign activation ids). Idempotent: a released activation returns
+ * gracefully. Used by the admin UI and the service API.
+ */
+export async function releaseActivationById(
+  licenseId: string,
+  activationId: string,
+  actor: { actorType: AuditActorType; actorId: string | null; ip: string | null; via: string },
+): Promise<ReleaseByIdResult> {
+  const existing = await prisma.activation.findUnique({ where: { id: activationId } });
+  if (!existing || existing.licenseId !== licenseId) {
+    return { ok: false, reason: 'not_found' };
+  }
+  if (existing.status === ActivationStatus.released) {
+    return { ok: true, released: false, alreadyReleased: true };
+  }
+
+  await prisma.activation.update({
+    where: { id: activationId },
+    data: { status: ActivationStatus.released, releasedAt: new Date() },
+  });
+  await writeAuditLog({
+    eventType: AuditEventType.ActivationReleased,
+    actorType: actor.actorType,
+    actorId: actor.actorId,
+    targetType: 'Activation',
+    targetId: activationId,
+    metadata: { licenseId, bindingType: existing.bindingType, via: actor.via },
+    ip: actor.ip,
+  });
+  return { ok: true, released: true, alreadyReleased: false };
 }
 
 /**

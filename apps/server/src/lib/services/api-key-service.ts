@@ -19,6 +19,8 @@ const scopeSchema = z.string().refine(
 export const apiKeyCreateSchema = z.object({
   name: z.string().min(1).max(120),
   scopes: z.array(scopeSchema).min(1),
+  /** Optional: restrict the key to a single license (multi-tenant isolation). */
+  licenseId: z.string().min(1).optional(),
 });
 
 export type ApiKeyCreateInput = z.infer<typeof apiKeyCreateSchema>;
@@ -31,6 +33,7 @@ export interface ApiKeyDto {
   id: string;
   name: string;
   scopes: ApiKeyScope[];
+  licenseId: string | null;
   createdAt: Date;
   lastUsedAt: Date | null;
   revokedAt: Date | null;
@@ -41,6 +44,7 @@ function toDto(row: ApiKey): ApiKeyDto {
     id: row.id,
     name: row.name,
     scopes: parseScopes(row.scopes),
+    licenseId: row.licenseId,
     createdAt: row.createdAt,
     lastUsedAt: row.lastUsedAt,
     revokedAt: row.revokedAt,
@@ -84,6 +88,7 @@ export async function createApiKey(
       name: input.name,
       keyHash: generated.hash,
       scopes,
+      licenseId: input.licenseId ?? null,
     },
   });
   await writeAuditLog({
@@ -91,7 +96,7 @@ export async function createApiKey(
     ...actorOf(ctx),
     targetType: 'ApiKey',
     targetId: row.id,
-    metadata: { name: row.name, scopes: input.scopes },
+    metadata: { name: row.name, scopes: input.scopes, licenseId: input.licenseId ?? null },
     ip: ctx.ip,
   });
   return { apiKey: toDto(row), plaintext: generated.plaintext };
