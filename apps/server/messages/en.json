@@ -181,7 +181,13 @@
     "statusReleased": "Released",
     "release": "Release",
     "releaseTitle": "Release seat",
-    "releaseConfirm": "Release this activation? The occupied seat will be freed; the device/user must re-activate."
+    "releaseConfirm": "Release this activation? The occupied seat will be freed; the device/user must re-activate.",
+    "groupAccount": "Accounts",
+    "groupDomain": "Domains",
+    "groupDevice": "Devices",
+    "groupInstallation": "Installations",
+    "groupEmpty": "No seat occupied.",
+    "noDisplayName": "(no display name)"
   },
   "auditLog": {
     "title": "Audit log",

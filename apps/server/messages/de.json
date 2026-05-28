@@ -181,7 +181,13 @@
     "statusReleased": "Freigegeben",
     "release": "Freigeben",
     "releaseTitle": "Platz freigeben",
-    "releaseConfirm": "Diese Aktivierung wirklich freigeben? Der belegte Platz wird frei; das Gerät/der Nutzer muss sich neu aktivieren."
+    "releaseConfirm": "Diese Aktivierung wirklich freigeben? Der belegte Platz wird frei; das Gerät/der Nutzer muss sich neu aktivieren.",
+    "groupAccount": "Accounts",
+    "groupDomain": "Domains",
+    "groupDevice": "Geräte",
+    "groupInstallation": "Installationen",
+    "groupEmpty": "Kein Platz belegt.",
+    "noDisplayName": "(ohne Anzeigename)"
   },
   "auditLog": {
     "title": "Audit-Log",
