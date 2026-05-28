@@ -2,9 +2,12 @@ import { defineConfig } from 'vitest/config';
 import path from 'node:path';
 
 export default defineConfig({
+  esbuild: {
+    jsx: 'automatic',
+  },
   test: {
     environment: 'node',
-    include: ['tests/**/*.{test,spec}.ts'],
+    include: ['tests/**/*.{test,spec}.{ts,tsx}'],
     globals: false,
     coverage: {
       provider: 'v8',

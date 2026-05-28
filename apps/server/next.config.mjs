@@ -46,8 +46,12 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   output: 'standalone',
-  outputFileTracingRoot: workspaceRoot,
   experimental: {
+    // Next.js 14: outputFileTracingRoot lebt unter `experimental` (erst ab 15
+    // top-level). Setzt den Monorepo-Root für das standalone-File-Tracing, damit
+    // der Prisma-Client + die linux-musl-Engine aus dem pnpm-Store mitgebündelt
+    // werden statt nur apps/server.
+    outputFileTracingRoot: workspaceRoot,
     serverComponentsExternalPackages: ['@node-rs/argon2', 'pino', 'pino-pretty'],
   },
   async headers() {

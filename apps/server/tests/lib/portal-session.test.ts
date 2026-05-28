@@ -25,7 +25,14 @@ describe('portal session JWT', () => {
   it('returns null for a tampered token', async () => {
     const { signPortalSession, verifyPortalSession } = await import('../../src/lib/portal/session');
     const { token } = await signPortalSession({ customerId: 'c_1', email: 'a@b.test' });
-    const tampered = token.slice(0, -1) + (token.endsWith('A') ? 'B' : 'A');
+    // Tamper inside the payload segment (header.payload.signature). Flipping a
+    // payload character deterministically invalidates the signature. Flipping
+    // only the LAST signature char could occasionally decode to the same bytes
+    // (non-canonical base64url) and stay valid — that made this test flaky.
+    const [header, payload, signature] = token.split('.');
+    const flippedPayload =
+      payload.slice(0, -1) + (payload.endsWith('A') ? 'B' : 'A');
+    const tampered = `${header}.${flippedPayload}.${signature}`;
     expect(await verifyPortalSession(tampered)).toBeNull();
   });
 

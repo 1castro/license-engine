@@ -78,6 +78,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/server/.next/static ./apps/s
 COPY --from=builder --chown=nextjs:nodejs /app/apps/server/public ./apps/server/public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/server/prisma ./apps/server/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/apps/server/messages ./apps/server/messages
+# CHANGELOG.md liegt im Repo-Root; die Admin-UI liest es zur Laufzeit (process.cwd()=/app).
+COPY --from=builder --chown=nextjs:nodejs /app/CHANGELOG.md ./CHANGELOG.md
 
 USER nextjs
 EXPOSE 3000

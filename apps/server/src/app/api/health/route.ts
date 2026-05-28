@@ -95,6 +95,19 @@ async function checkAuditLog(): Promise<CheckResult & { latestEventAgoSeconds?: 
 }
 
 export async function GET(req: Request) {
+  // Internal-only. The Docker HEALTHCHECK and any in-cluster monitoring reach
+  // this over localhost / the Docker network and carry NO x-forwarded-*.
+  // External requests arrive through the reverse proxy, which always sets
+  // x-forwarded-*; we answer those with 404 so no infrastructure internals
+  // (DB latency, mail host, key status) are visible from the internet without
+  // auth. The public API (`/api/v1/*`) and login pages stay reachable.
+  if (
+    req.headers.get('x-forwarded-for') !== null ||
+    req.headers.get('x-forwarded-host') !== null
+  ) {
+    return new NextResponse(null, { status: 404 });
+  }
+
   const log = getLogger();
 
   // Liveness probe (`?level=live`): only the process being up + the database

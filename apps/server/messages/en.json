@@ -11,6 +11,7 @@
     "apiKeys": "API keys",
     "auditLog": "Audit log",
     "settings": "Settings",
+    "changelog": "Changelog",
     "logout": "Sign out"
   },
   "auth": {

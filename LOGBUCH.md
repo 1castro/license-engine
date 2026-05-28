@@ -4,6 +4,70 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-05-28 — Post-Deploy: Health-Abschirmung, Favicon, Changelog-UI, Dockge-Fix
+
+### Health-Endpoint abgeschirmt
+- `/api/health` antwortet extern (über Reverse-Proxy, erkennbar an `x-forwarded-*`) mit 404; intern (Docker-Healthcheck, Monitoring im Docker-Netz) weiter erreichbar. Keine Infrastruktur-Interna mehr ohne Auth nach außen sichtbar. Die öffentliche API (`/api/v1/*`) bleibt unberührt.
+
+### Favicon
+- `app/icon.svg` (Schlüssel-Symbol, blauer Gradient) + generiertes `favicon.ico` (16/32/48) + `apple-icon.png` (180) via `rsvg-convert`. Next.js App Router bindet alle drei automatisch ein. Im Browser verifiziert (Login-Seite, alle drei 200 + korrekte Content-Types).
+
+### Changelog in der Admin-UI
+- `CHANGELOG.md` versioniert nach Keep a Changelog (1.0.0 = Production-Release, 0.1.0–0.6.0 = Phasen).
+- Seitenleisten-Eintrag „Changelog" öffnet ein Modal, das `CHANGELOG.md` zur Laufzeit liest und mit einem eigenen, XSS-sicheren Markdown-Renderer (React-Elemente, kein `dangerouslySetInnerHTML`) darstellt. Renderer per Unit-Test abgesichert (inkl. HTML-Escaping-Test). `CHANGELOG.md` wird ins Image kopiert (`.dockerignore`-Ausnahme).
+
+### Dockge-/Container-Verwaltung repariert
+- `image: license-engine:latest` ließ Dockge beim Start/Update versuchen, das (nur lokal gebaute) Image zu pullen → „pull access denied". Fix: `pull_policy: never` + Watchtower-Exclude-Label. Start/Recreate/.env-Neuladen aus Dockge funktionieren wieder.
+- Migrations-Service ins `migrate`-Profile → kein dauerhaft „exited" Container, Dockge zeigt den Stack als aktiv.
+- `next.config.mjs`: `outputFileTracingRoot` nach `experimental` verschoben (Next 14 erkennt es sonst nicht; Build lief bisher nur dank Auto-Detection).
+
+### Status
+- typecheck/lint/test/build grün (111 Server- + 18 SDK-Tests). Deploy nach Pre-Deploy-Audit (Runde 3).
+
+---
+
+## 2026-05-28 — Production-Deploy auf 188.245.95.60 (license.tropicsoft.de)
+
+### Deploy-Architektur (mit Jan abgestimmt)
+- Eigener Compose-Stack `/opt/stacks/license-engine/` (compose.yaml + .env, chmod 600), Code unter `/opt/license-engine/code/`.
+- Zwei Container in einem Stack: `license-engine` (Next.js standalone) + `license-engine-db` (PostgreSQL 16, nur internes Netz, eigenes Volume). Kein Host-Port — Zugriff nur über NGX Proxy Manager im `reverse-proxy`-Netz auf `license-engine:3000`.
+- Update-Strategie A: Code per `deploy/deploy.sh` rsyncen, auf dem Server bauen (Layer-Cache), kein Image-Push. Migrations als one-shot vor App-Start.
+
+### Build-Hürden auf dem Server (lokal nicht sichtbar)
+- node:20 → node:22-alpine (pnpm 11.3 braucht Node ≥ 22.13), `corepack@latest`, `apk add openssl` (Prisma-Engine), Build-Zeit-Platzhalter-ENV für `next build`, fragile `COPY node_modules/.prisma` entfernt (pnpm-Layout).
+
+### Inbetriebnahme
+- ENCRYPTION_KEY/NEXTAUTH_SECRET/POSTGRES_PASSWORD frisch auf dem Server generiert (nie durch den Chat). Admin-Bootstrap durch Jan (TOTP). SMTP gegen mailcow aktiv (Verbindungstest grün).
+- Externer Smoke-Test grün: `/` + `/admin/login` = 200, Security-Header durch den Proxy.
+
+### Commits
+- `a6872d7` Production-Deploy-Setup, `12185ce` Dockerfile-Fixes, `47ef2f5` migrate-Profile, `63665ae` pull_policy/Watchtower.
+
+---
+
+## 2026-05-27 — Pre-Deploy-Audit + Härtung (Audit-Workflow)
+
+### Audit-Runde 1 — Scope: Code-Stand nach Phase 6 + SMTP (vor `d595c93`)
+Drei Audit-Agenten (Code / Workflow / Security). Ergebnis: **4 Blocker + 11 Major + ~15 Minor**.
+- Blocker: License-Key-Checksum auf Damm-Algorithmus (Server+SDK), Customer.email UNIQUE + Normalisierung, TOTP atomic compare-and-set, Portal-Auth-Token atomic consume.
+- Major: applyBindings in Transaktion mit Row-Lock, verifyLicenseToken-Negativtests, Recheck liefert `recheckIntervalHours`, Recheck filtert released Bindings, Idempotenz auch bei `manual`+externalRef, License-Expiry (Lazy + Cron), Security-Header, `TRUST_PROXY_HEADERS`, Body-Size-Cap + bindings.max.
+- Alle Blocker + Major gefixt → Commit `d595c93`. **Status: grün.**
+
+### Audit-Runde 2 — Scope: `d595c93` (vor `be31178`)
+Re-Audit. Workflow + Security grün, Code-Audit fand **3 Major**:
+- License-Status-Re-Check innerhalb der applyBindings-Transaktion (Race zwischen Read und Lock).
+- BindingType-Whitelist im Recheck-Filter (sonst 500 bei unbekanntem Enum-Wert).
+- SDK-verify auf jose-Error-Klassen (statt Message-Regex). Plus Flow-9 (alle Bindings released → 403).
+- Gefixt → Commit `be31178`. **Status: grün.**
+
+### Audit-Runde 3 — Scope: Deploy-Artefakte (vor `a6872d7`)
+DevOps-/Workflow-/Security-Audit der compose.yaml/Dockerfile/deploy.sh. Workflow + Security grün, DevOps **1 Blocker + 1 Major**:
+- Blocker: Container-Healthcheck hing am degradierbaren Mail-Check (503) → Liveness-Pfad `?level=live` eingeführt.
+- Major: migrate-Service brauchte `env_file` für den Bootstrap-Lauf.
+- Gefixt → Teil von `a6872d7`. **Status: grün → Deploy freigegeben.**
+
+---
+
 ## 2026-05-27 — Phase 6 Self-Service-Portal komplett
 
 ### Bündel A — Schema-Erweiterung

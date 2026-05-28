@@ -266,3 +266,35 @@ Detaillierte Phasen- und Task-Planung. Tasks werden während der Umsetzung verfe
 - Lizenz-Übersicht pro Kunde
 - Aktivierungen anzeigen, Geräte-Wechsel (Aktivierung freigeben)
 - Rechnungs-/Subscription-Daten (falls relevant)
+
+---
+
+## Phase 7 — Pre-Deploy-Härtung & Production-Deploy
+
+**Status:** done (2026-05-28). Details siehe `LOGBUCH.md` (Audit-Runden 1–3 + Deploy).
+
+**Härtung (drei Audit-Runden, alle Blocker/Major gefixt):**
+- Damm-Checksum für License-Keys (Server + SDK), Customer.email UNIQUE + Normalisierung.
+- TOTP- und Portal-Token-Einlösung atomar (compare-and-set).
+- `applyBindings` in Transaktion mit `SELECT … FOR UPDATE` + Status-Re-Check innerhalb der Sperre.
+- Recheck: Binding-Filter (released raus) + BindingType-Whitelist; Flow „alle Bindings released → 403".
+- Token-Verify-Fehler über jose-Error-Klassen (Server + SDK), Negativ-Tests.
+- License-Lazy-Expire (activate/recheck) + Cron-Skript `pnpm licenses:expire`.
+- Security-Header (HSTS/CSP/X-Frame/…), `TRUST_PROXY_HEADERS`, Body-Size-Cap, `bindings.max`.
+- `/api/health` extern abgeschirmt (404 bei `x-forwarded-*`), Liveness-Pfad `?level=live`.
+- Portal-Cookie `SameSite=Strict`, Login loggt nur IP-Hash, pino-Redact erweitert.
+
+**Deployment:**
+- Compose-Stack auf `188.245.95.60` (`/opt/stacks/license-engine/`), Code unter `/opt/license-engine/code/`.
+- Zwei Container (App + PostgreSQL 16), kein Host-Port, Zugriff via NGX Proxy Manager → `license.tropicsoft.de`.
+- Multi-Stage-Build (Next.js standalone, Node 22, Alpine, openssl), Migrations als one-shot im `migrate`-Profile, `pull_policy: never` + Watchtower-Ausschluss.
+- Update-Workflow: `deploy/deploy.sh` (rsync + Server-Build + Migrations + recreate).
+
+**Verifikation:**
+- 111 Server- + 18 SDK-Tests, typecheck/lint/build grün.
+- Externer Smoke-Test: `/` + `/admin/login` = 200, Security-Header durch den Proxy.
+- Admin-Login mit TOTP, SMTP-Verbindungstest gegen mailcow grün.
+
+**UI-Ergänzungen:**
+- Favicon (Schlüssel-Symbol, App-Router-Konvention).
+- Changelog-Modal in der Seitenleiste (liest `CHANGELOG.md`, XSS-sicherer Renderer, Unit-getestet).

@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth/config';
 import { setRequestLocale, getTranslations } from 'next-intl/server';
 import { redirect } from '@/i18n/navigation';
 import { Link } from '@/i18n/navigation';
+import { readChangelog } from '@/lib/changelog';
+import { ChangelogDialog } from '@/components/changelog-dialog';
 
 export default async function AdminLayout({
   children,
@@ -25,6 +27,7 @@ export default async function AdminLayout({
   }
 
   const t = await getTranslations('nav');
+  const changelog = readChangelog();
 
   return (
     <div className="min-h-screen bg-neutral-50">
@@ -41,6 +44,9 @@ export default async function AdminLayout({
           <NavItem href="/admin/audit-log" label={t('auditLog')} />
           <NavItem href="/admin/settings" label={t('settings')} disabled />
         </nav>
+        <div className="border-t border-neutral-200 px-3 py-2">
+          <ChangelogDialog content={changelog} label={t('changelog')} />
+        </div>
         <div className="border-t border-neutral-200 px-3 py-3 text-sm">
           <span className="block px-3 py-1 text-neutral-500">{session.user?.email}</span>
           <form action="/api/auth/signout" method="post">

@@ -53,7 +53,9 @@ services:
       - ./apps/server/prisma:/app/apps/server/prisma
       - ./packages:/app/packages
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      # Liveness only (process + DB) — die volle /api/health-Readiness (Mail,
+      # Signing-Keys) darf den Container nicht unhealthy machen.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health?level=live').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
       interval: 15s
       timeout: 5s
       retries: 5

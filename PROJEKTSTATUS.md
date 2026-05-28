@@ -1,8 +1,19 @@
 # PROJEKTSTATUS — License Engine
 
-**Aktueller Stand:** **Phase 6 (Self-Service-Portal) done.** License Engine fundamental feature-complete. Roadmap-Backlog für spätere Iterationen siehe unten.
+**Aktueller Stand:** **LIVE in Produktion.** Phase 1–6 feature-complete, durch drei Pre-Deploy-Audit-Runden gehärtet, deployed auf `188.245.95.60` und erreichbar unter **https://license.tropicsoft.de**.
 
-**Letztes Update:** 2026-05-27
+**Letztes Update:** 2026-05-28
+
+---
+
+## Deployment (Produktion)
+- **URL:** https://license.tropicsoft.de (via NGX Proxy Manager → `license-engine:3000`, kein Host-Port).
+- **Server:** `188.245.95.60`, Stack `/opt/stacks/license-engine/`, Code `/opt/license-engine/code/`.
+- **Container:** `license-engine` (Next.js standalone) + `license-engine-db` (PostgreSQL 16, internes Netz, Volume `license-engine-db-data`). Beide healthy.
+- **Update-Workflow:** lokal entwickeln → committen → `deploy/deploy.sh` (rsync + Build auf dem Server + Migrations-one-shot + recreate). Kein Image-Push.
+- **Mail:** SMTP gegen mailcow (`licensing@tropicsoft.de`) aktiv.
+- **Secrets:** ENCRYPTION_KEY/NEXTAUTH_SECRET/POSTGRES_PASSWORD in `/opt/stacks/license-engine/.env` (chmod 600). **ENCRYPTION_KEY ist im Bitwarden zu sichern — ohne ihn sind die Signing-Keys unwiederbringlich.**
+- **Health:** `/api/health` extern abgeschirmt (404), intern Liveness `?level=live` für den Docker-Healthcheck.
 
 ---
 
@@ -15,7 +26,9 @@
 - AuditLog-Writer mit IP-Hash via HMAC-SHA256 (stable Pseudonymisierung), Metadata-Scrubbing, fire-and-forget bei DB-Fehlern.
 - Admin-CRUD-UIs für Produkte, Kunden, Lizenzen, API-Keys (shadcn/ui + react-hook-form + Radix-Primitives). Forms POSTen an die Admin-API-Routes.
 - Admin-API unter `/api/admin/v1/*`: Products/Customers/Licenses/ApiKeys, Auth via Session ODER API-Key mit Scope-Check, **License- UND Customer-Create idempotent** über `(externalRef, externalSource)`.
-- Vitest mit **92 Tests grün** insgesamt (87 Server + 5 SDK).
+- Vitest mit **129 Tests grün** insgesamt (111 Server + 18 SDK).
+- **Production-Härtung** (Audit-Runden 1–3): Damm-Checksum (Server+SDK), Customer.email UNIQUE, TOTP- + Portal-Token-atomic-consume, applyBindings in Transaktion mit Row-Lock + Status-Re-Check, Recheck-Binding-Filter (released raus, Enum-Whitelist), License-Lazy-Expire + Cron, Security-Header (HSTS/CSP/X-Frame), `TRUST_PROXY_HEADERS`, Body-Size-Cap, Health-Endpoint extern abgeschirmt, Portal-Cookie SameSite=Strict.
+- **Admin-UI**: Favicon (Schlüssel-Symbol) + Changelog-Modal (liest `CHANGELOG.md`, XSS-sicherer Renderer) in der Seitenleiste.
 - **Self-Service-Portal** (Phase 6): eigener Customer-Auth-Pfad (Email + Argon2-Passwort), separater JWT-Cookie `le_portal_session`, Setup-Mail beim Customer-Create (Auto-Hook), Forgot-/Reset-Flow mit single-use Tokens (Hash-only-Storage), Portal-UI unter `/portal/*` mit Lizenz-Übersicht + License-Detail + Activation-Release per Inline-Modal. Aktivierungen zeigen sprechenden Display-Namen (`Domain — Jans Laptop (Dev)`) statt nur Hash.
 - **Mail-Versand**: `ConsoleMailSender`-Stub Tag-2 (Inhalt im pino-Log); SMTP-Adapter folgt mit mailcow-Setup.
 - **Audit + Härtung** (Phase 5): Audit-Log-Viewer im Admin-UI mit Filter + Pagination, Brute-Force-Backoff zusätzlich zum Token-Bucket, Key-Rotation-UI für Produkte, Health-Check mit 4 parallelen Checks (DB / KEK / SigningKey-Coverage / Audit-Recency). Backup-Konzept und Pre-Deploy-Audit-Workflow als Doku.
@@ -24,14 +37,19 @@
 - **Public-API** unter `/api/v1/*`: `POST /activate` (License-Key + Bindings → JWT), `POST /recheck` (JWT → erneuertes JWT oder Revocation-Signal), `POST /deactivate` (Activation freigeben, idempotent), `GET /.well-known/public-keys` (SPKI-PEM für alle Produkte, incl. rotierter Keys für Grace-Window). Rate-Limiting per IP-Hash: activate 10/min, recheck 60/min.
 - **BindingPolicy**: `{required?:[…], maxPerType?:{…}}`. `applyBindings` enforced required types und per-type-Quota, resurrected released Activations bei Wiedersehen.
 
+## Erledigt seit Feature-Complete
+- ~~SMTP-Adapter~~ — `SmtpMailSender` (nodemailer, mailcow) live.
+- ~~Multi-Stage-Dockerfile `runtime`-Target~~ — deployed (Build auf dem Server, kein Registry-Push nötig).
+- ~~Pre-Deploy-Audit + Härtung~~ — drei Audit-Runden, alle Blocker/Major gefixt.
+
 ## Backlog (priorisiert)
-1. **SMTP-Adapter** statt ConsoleMailSender — Drop-in mit nodemailer gegen tropicsoft-mailcow. Klein, kommt mit konkretem Mail-Account-Setup.
+1. **Erste Test-Lizenzierung** — eine Web-Applikation als reales Testobjekt anbinden (nächster Schritt mit Jan).
 2. **Rate-Limiter auf Redis** für Multi-Instance-Deploy. Aktuell single-instance, kein akutes Problem.
 3. **React-Bindings für SDK** (`@tropicsoft/license-sdk-js/react`) — wenn erste React-App das SDK clientseitig nutzt.
 4. **KEK-Rotation-Skript** — wenn konkreter Anlass (Mitarbeiter-Wechsel, suspected leak).
 5. **Display-Name-Backfill** für Pre-Phase-6-Aktivierungen — einmalig wenn der Optik-Mangel stört.
-6. **Multi-Stage-Dockerfile `runtime`-Target** End-to-End-Build und -Push in eine Registry.
-7. **GitHub Actions CI** wieder einbauen mit funktionierender Test-DB (war Phase 1 entfernt wegen Mail-Spam bei jedem Push).
+6. **GitHub Actions CI** wieder einbauen mit funktionierender Test-DB (war Phase 1 entfernt wegen Mail-Spam bei jedem Push).
+7. **NPM: `/api/health` zusätzlich proxy-seitig blocken** (Defense-in-Depth, optional — app-seitig bereits abgeschirmt).
 
 ---
 

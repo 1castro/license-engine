@@ -15,7 +15,7 @@ README.md
 LOGBUCH.md
 PROJEKTSTATUS.md
 PHASEN.md
-CHANGELOG.md
 CLAUDE.md
+# CHANGELOG.md NICHT ausschließen — die Admin-UI liest es zur Laufzeit (Modal).
 .vscode
 .idea
