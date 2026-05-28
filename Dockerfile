@@ -10,8 +10,14 @@
 # Build dev:          docker build --target dev -t license-engine:dev .
 
 # ------------------------------------------------------------ base
-FROM node:20-alpine AS base
-RUN corepack enable && corepack prepare pnpm@11.3.0 --activate
+FROM node:22-alpine AS base
+# - openssl: Prisma braucht es zur Engine-Auswahl (sonst "failed to detect
+#   libssl version" -> Migration-Engine bricht auf alpine).
+# - corepack@latest: das im Image gebündelte corepack ist zu alt für pnpm 11.x.
+RUN apk add --no-cache openssl \
+ && npm install -g corepack@latest \
+ && corepack enable \
+ && corepack prepare pnpm@11.3.0 --activate
 WORKDIR /app
 
 # ------------------------------------------------------------ deps
@@ -36,15 +42,29 @@ CMD ["pnpm", "dev"]
 # ------------------------------------------------------------ builder
 FROM deps AS builder
 ENV NODE_ENV=production
+# Build-Zeit-Platzhalter: `next build` lädt beim "Collecting page data" die
+# Route-Module, die env.ts validieren. Im Builder gibt es keine .env, daher
+# würde die Zod-Validierung scheitern. Diese Werte sind NUR fürs Build gültig —
+# alle Routen sind `force-dynamic` und lesen process.env zur Laufzeit neu aus
+# dem echten Container-env. (ENCRYPTION_KEY = 32 Null-Bytes base64-kodiert.)
+ENV DATABASE_URL="postgresql://build:build@localhost:5432/build?schema=public" \
+    APP_BASE_URL="http://localhost:3000" \
+    JWT_ISSUER="build-placeholder" \
+    NEXTAUTH_SECRET="build-time-placeholder-secret-min-32-chars-xxxx" \
+    NEXTAUTH_URL="http://localhost:3000" \
+    ENCRYPTION_KEY="AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 COPY . .
 RUN pnpm --filter @license-engine/server prisma:generate \
  && pnpm --filter @license-engine/shared-types build \
  && pnpm --filter @license-engine/server build
 
 # ------------------------------------------------------------ runtime
-FROM node:20-alpine AS runtime
+FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
+# openssl: die Prisma-Query-Engine braucht libssl auch zur Laufzeit.
+RUN apk add --no-cache openssl \
+ && addgroup --system --gid 1001 nodejs \
+ && adduser --system --uid 1001 nextjs
 WORKDIR /app
 
 # Next.js standalone output bundles the minimal node_modules it needs —
