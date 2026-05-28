@@ -187,7 +187,12 @@
     "groupDevice": "Devices",
     "groupInstallation": "Installations",
     "groupEmpty": "No seat occupied.",
-    "noDisplayName": "(no display name)"
+    "noDisplayName": "(no display name)",
+    "searchPlaceholder": "Search (name or hash)…",
+    "noResults": "No matches.",
+    "prev": "Previous",
+    "next": "Next",
+    "pageOf": "Page {page} of {total}"
   },
   "auditLog": {
     "title": "Audit log",

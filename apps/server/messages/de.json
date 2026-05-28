@@ -187,7 +187,12 @@
     "groupDevice": "Geräte",
     "groupInstallation": "Installationen",
     "groupEmpty": "Kein Platz belegt.",
-    "noDisplayName": "(ohne Anzeigename)"
+    "noDisplayName": "(ohne Anzeigename)",
+    "searchPlaceholder": "Suchen (Name oder Hash)…",
+    "noResults": "Keine Treffer.",
+    "prev": "Zurück",
+    "next": "Weiter",
+    "pageOf": "Seite {page} von {total}"
   },
   "auditLog": {
     "title": "Audit-Log",
