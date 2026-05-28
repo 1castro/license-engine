@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { prisma } from '../prisma';
 import { writeAuditLog, AuditEventType } from '../audit';
 import { generateLicenseKey } from '../license/license-key';
+import { bindingPolicySchema } from '../binding/binding-policy';
 import type { AdminAuthContext } from '../auth/admin-route-auth';
 import { actorOf } from '../auth/admin-route-auth';
 
@@ -24,9 +25,9 @@ const expiresAtSchema = z
 
 const featureFlagsSchema = z.array(z.string().min(1).max(64));
 
-// bindingPolicy is intentionally free-form JSON at Tag 2 — no editor yet,
-// the structure is validated by the activation flow downstream.
-const bindingPolicySchema = z.record(z.unknown());
+// Strict write-path validation of the binding policy: required[] must be valid
+// BindingTypes, maxPerType must be positive ints. Unknown keys are dropped.
+// (Same schema the activation flow reads, so write and read can't diverge.)
 
 export const licenseCreateSchema = z.object({
   customerId: cuidString,
@@ -34,7 +35,7 @@ export const licenseCreateSchema = z.object({
   type: z.nativeEnum(LicenseType),
   expiresAt: expiresAtSchema,
   featureFlags: featureFlagsSchema.default([]),
-  bindingPolicy: bindingPolicySchema.default({}),
+  bindingPolicy: bindingPolicySchema,
   externalRef: z.string().min(1).max(200).optional(),
   externalSource: z.nativeEnum(ExternalSource).default('manual'),
 });

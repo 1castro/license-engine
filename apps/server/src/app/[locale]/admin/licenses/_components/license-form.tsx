@@ -11,14 +11,12 @@ import { Button } from '@/components/ui/button';
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import {
@@ -57,7 +55,7 @@ export interface LicenseFormInitial {
 }
 
 const baseSchema = z.object({
-  bindingPolicyText: z.string().max(8000),
+  bindingPolicy: z.record(z.unknown()).default({}),
   featureFlags: z.array(z.string()).default([]),
   expiresAt: z.string().max(40).optional().default(''),
 });
@@ -103,28 +101,8 @@ export function LicenseForm(props: CreateProps | EditProps) {
   );
 }
 
-function bindingPolicyToText(policy: Record<string, unknown>): string {
-  if (Object.keys(policy).length === 0) return '{}';
-  return JSON.stringify(policy, null, 2);
-}
-
-function tryParseJson(value: string): { ok: true; value: Record<string, unknown> } | { ok: false } {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return { ok: true, value: {} };
-  try {
-    const parsed: unknown = JSON.parse(trimmed);
-    if (
-      parsed !== null &&
-      typeof parsed === 'object' &&
-      !Array.isArray(parsed)
-    ) {
-      return { ok: true, value: parsed as Record<string, unknown> };
-    }
-    return { ok: false };
-  } catch {
-    return { ok: false };
-  }
-}
+/** Binding types the policy editor exposes, in display order. */
+const BINDING_TYPES = ['domain', 'account', 'device', 'installation'] as const;
 
 function CreateLicenseForm({
   customers,
@@ -146,7 +124,7 @@ function CreateLicenseForm({
       type: 'subscription',
       expiresAt: '',
       featureFlags: [],
-      bindingPolicyText: '{}',
+      bindingPolicy: {},
       externalRef: '',
       externalSource: 'manual',
     },
@@ -161,18 +139,12 @@ function CreateLicenseForm({
   async function onSubmit(values: CreateValues) {
     setSubmitError(null);
 
-    const parsedPolicy = tryParseJson(values.bindingPolicyText);
-    if (!parsedPolicy.ok) {
-      form.setError('bindingPolicyText', { message: t('invalidJson') });
-      return;
-    }
-
     const payload: Record<string, unknown> = {
       customerId: values.customerId,
       productId: values.productId,
       type: values.type,
       featureFlags: values.featureFlags,
-      bindingPolicy: parsedPolicy.value,
+      bindingPolicy: values.bindingPolicy,
       externalSource: values.externalSource,
     };
     if (values.expiresAt.trim().length > 0) {
@@ -365,20 +337,9 @@ function CreateLicenseForm({
 
         <FormField
           control={form.control}
-          name="bindingPolicyText"
+          name="bindingPolicy"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t('bindingPolicy')}</FormLabel>
-              <FormControl>
-                <Textarea
-                  {...field}
-                  rows={8}
-                  className="font-mono text-xs"
-                />
-              </FormControl>
-              <FormDescription>{t('bindingPolicyHint')}</FormDescription>
-              <FormMessage />
-            </FormItem>
+            <BindingPolicyField value={field.value} onChange={field.onChange} />
           )}
         />
 
@@ -426,7 +387,7 @@ function EditLicenseForm({
   const form = useForm<EditValues>({
     resolver: zodResolver(baseSchema),
     defaultValues: {
-      bindingPolicyText: bindingPolicyToText(initial.bindingPolicy),
+      bindingPolicy: initial.bindingPolicy,
       featureFlags: initial.featureFlags,
       expiresAt: initial.expiresAt
         ? toLocalDatetimeInput(new Date(initial.expiresAt))
@@ -437,15 +398,9 @@ function EditLicenseForm({
   async function onSubmit(values: EditValues) {
     setSubmitError(null);
 
-    const parsedPolicy = tryParseJson(values.bindingPolicyText);
-    if (!parsedPolicy.ok) {
-      form.setError('bindingPolicyText', { message: t('invalidJson') });
-      return;
-    }
-
     const payload: Record<string, unknown> = {
       featureFlags: values.featureFlags,
-      bindingPolicy: parsedPolicy.value,
+      bindingPolicy: values.bindingPolicy,
     };
     payload.expiresAt =
       values.expiresAt.trim().length > 0
@@ -532,20 +487,9 @@ function EditLicenseForm({
 
         <FormField
           control={form.control}
-          name="bindingPolicyText"
+          name="bindingPolicy"
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t('bindingPolicy')}</FormLabel>
-              <FormControl>
-                <Textarea
-                  {...field}
-                  rows={8}
-                  className="font-mono text-xs"
-                />
-              </FormControl>
-              <FormDescription>{t('bindingPolicyHint')}</FormDescription>
-              <FormMessage />
-            </FormItem>
+            <BindingPolicyField value={field.value} onChange={field.onChange} />
           )}
         />
 
@@ -642,6 +586,92 @@ function FeatureFlagsField(props: {
             );
           })
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Binding-policy editor. Replaces the raw-JSON textarea with a per-type row:
+ * "required" checkbox + "max seats" number field (empty = unlimited). Emits the
+ * policy shape the engine enforces: `{ required?: string[], maxPerType?: {…} }`.
+ * Shared (value/onChange) so both create- and edit-form can drive it.
+ */
+function BindingPolicyField(props: {
+  value: Record<string, unknown>;
+  onChange: (next: Record<string, unknown>) => void;
+}) {
+  const t = useTranslations('licenses');
+  const typeLabels: Record<string, string> = {
+    domain: t('bindingTypeDomain'),
+    account: t('bindingTypeAccount'),
+    device: t('bindingTypeDevice'),
+    installation: t('bindingTypeInstallation'),
+  };
+
+  const required = Array.isArray(props.value.required)
+    ? (props.value.required as string[])
+    : [];
+  const maxPerType =
+    props.value.maxPerType && typeof props.value.maxPerType === 'object'
+      ? (props.value.maxPerType as Record<string, number>)
+      : {};
+
+  function emit(nextRequired: string[], nextMax: Record<string, number>) {
+    const policy: Record<string, unknown> = {};
+    if (nextRequired.length > 0) policy.required = nextRequired;
+    if (Object.keys(nextMax).length > 0) policy.maxPerType = nextMax;
+    props.onChange(policy);
+  }
+
+  function toggleRequired(type: string, checked: boolean) {
+    emit(checked ? [...required, type] : required.filter((r) => r !== type), maxPerType);
+  }
+
+  function setMax(type: string, raw: string) {
+    const next = { ...maxPerType };
+    const n = Number.parseInt(raw, 10);
+    if (raw.trim() === '' || Number.isNaN(n) || n <= 0) {
+      delete next[type];
+    } else {
+      next[type] = n;
+    }
+    emit(required, next);
+  }
+
+  return (
+    <div className="space-y-2">
+      <Label>{t('bindingPolicy')}</Label>
+      <p className="text-sm text-muted-foreground">{t('bindingPolicyHint')}</p>
+      <div className="overflow-hidden rounded-md border border-input">
+        <div className="grid grid-cols-[1fr_7rem_9rem] items-center gap-2 border-b border-input bg-muted px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span>{t('bindingType')}</span>
+          <span className="text-center">{t('bindingRequired')}</span>
+          <span>{t('maxSeats')}</span>
+        </div>
+        {BINDING_TYPES.map((type) => (
+          <div
+            key={type}
+            className="grid grid-cols-[1fr_7rem_9rem] items-center gap-2 px-3 py-2 text-sm"
+          >
+            <span>{typeLabels[type]}</span>
+            <div className="flex justify-center">
+              <Checkbox
+                checked={required.includes(type)}
+                onCheckedChange={(c) => toggleRequired(type, c === true)}
+                aria-label={`${typeLabels[type]} ${t('bindingRequired')}`}
+              />
+            </div>
+            <Input
+              type="number"
+              min={1}
+              placeholder={t('unlimited')}
+              value={maxPerType[type] ?? ''}
+              onChange={(e) => setMax(type, e.target.value)}
+              aria-label={`${typeLabels[type]} ${t('maxSeats')}`}
+            />
+          </div>
+        ))}
       </div>
     </div>
   );
