@@ -123,7 +123,7 @@ services:
         - CMD
         - node
         - -e
-        - "fetch('http://localhost:3000/api/health?level=live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        - "fetch('http://localhost:3000/api/health?level=live',{headers:{'x-health-token':process.env.HEALTH_CHECK_TOKEN||''}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
       interval: 15s
       timeout: 5s
       retries: 5

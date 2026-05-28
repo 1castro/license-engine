@@ -15,6 +15,14 @@ const envSchema = z
       .default('info'),
     ADMIN_BOOTSTRAP_EMAIL: z.string().email().optional(),
     ADMIN_BOOTSTRAP_PASSWORD: z.string().min(12).optional(),
+    /**
+     * Shared secret that gates /api/health. When set, the endpoint only answers
+     * requests presenting it (header `x-health-token` or `?token=`); everything
+     * else gets 404. The Docker healthcheck + monitoring send it. Leave unset in
+     * dev to keep the endpoint open. Next.js rewrites all x-forwarded-* headers,
+     * so a token is the only reliable internal/external discriminator.
+     */
+    HEALTH_CHECK_TOKEN: z.string().min(1).optional(),
     // SMTP — all optional; if all five are set, SmtpMailSender is used
     // automatically, otherwise ConsoleMailSender prints to the pino log.
     SMTP_HOST: z.string().min(1).optional(),

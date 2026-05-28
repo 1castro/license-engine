@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getEnv } from '@/lib/env';
 import { getLogger } from '@/lib/logger';
 import { getKeyProvider } from '@/lib/crypto';
 import { getLatestAuditLogTimestamp } from '@/lib/services/audit-log-service';
@@ -95,16 +96,19 @@ async function checkAuditLog(): Promise<CheckResult & { latestEventAgoSeconds?: 
 }
 
 export async function GET(req: Request) {
-  // Internal-only. We gate on `x-forwarded-for`: the reverse proxy (NPM) always
-  // sets it for external requests and an attacker cannot strip it (nginx appends
-  // its own value). Internal callers — the Docker HEALTHCHECK over localhost and
-  // monitoring on the Docker network — do NOT carry it, so they pass.
-  //
-  // NB: do NOT gate on `x-forwarded-host` — Next.js sets that header itself even
-  // for localhost requests (URL construction), so it would 404 the internal
-  // healthcheck too. Only `x-forwarded-for` reliably marks a proxied request.
-  if (req.headers.get('x-forwarded-for') !== null) {
-    return new NextResponse(null, { status: 404 });
+  // Internal-only via shared token. Next.js rewrites every x-forwarded-* header
+  // (even on localhost), so those can't tell internal from external apart — a
+  // secret token is the only reliable gate. When HEALTH_CHECK_TOKEN is set
+  // (production), the caller must present it via `x-health-token` header or
+  // `?token=`; otherwise 404, so the endpoint is invisible from the internet.
+  // Unset (dev) → open. The Docker healthcheck + monitoring send the token.
+  const healthToken = getEnv().HEALTH_CHECK_TOKEN;
+  if (healthToken) {
+    const url = new URL(req.url);
+    const provided = req.headers.get('x-health-token') ?? url.searchParams.get('token');
+    if (provided !== healthToken) {
+      return new NextResponse(null, { status: 404 });
+    }
   }
 
   const log = getLogger();
