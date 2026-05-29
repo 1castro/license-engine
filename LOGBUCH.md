@@ -4,6 +4,22 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-05-29 — Fehlversuch-Protokoll + Integrationstest-Infra + Audit-Retention
+
+Großer Härtungs-Block (alles License-Engine, vor erster echter App-Integration). Drei Themen, jedes mit Pre-Deploy-Audit (Workflow, 3 Dim + adversariale Verifikation) + Fix-Runde + Re-Check.
+
+**1. Fehlversuch-Protokoll** (Commits `0a07b3d` + Audit-Fixes `16813d7`): Abgewiesene Aktivierungen (`activation.rejected`) werden jetzt an allen fachlichen Ablehnungspfaden von activate erfasst (ungültiger Key, unbekannte/inaktive/abgelaufene Lizenz, Limit, Pflichtbindung) — Transport-Rauschen bewusst nicht. Sichtbar: Dashboard (war leer → Kennzahlen + aktive-Lizenzen-Liste + wegklickbares Banner), Lizenz-Detailseite (Detail-Tabelle), Kundenportal (schlichter Hinweis, nur Anzahl). Audit-Fund (major): Label "Nicht autorisierte Domain" war fachlich falsch (keine Allowlist, nur Limit) → "Domain-Limit erreicht".
+
+**2. Integrationstest-Infrastruktur** (`fad4366`): Erstmals echte Route-Handler gegen echtes Postgres (Wegwerf-DB Port 5433, `docker-compose.test.yml`, `pnpm test:integration`, getrennt von der DB-freien Unit-Suite). **16 Integrationstests** sichern die sicherheitskritischen Pfade ab: Seat-Limit→409, Quota-beim-Reaktivieren (Anti-Churn), Reject-Audit (positiv+negativ), revoked/expired-Lizenz, Multi-Tenant-Isolation (fremde Lizenz→404), Admin-Session-Bypass, Privilege-Escalation-Sperre. Damit ist die B1/B2-Härtung aus dem v1.2.0-Audit automatisch abgedeckt.
+
+**3. Audit-Log-Retention** (`fad4366` + Audit-Fixes `6992236`): differenziertes Pruning (`audit:prune`-Cron-Skript) — Sicherheits-/Forensik-Events 365 Tage (ENV `AUDIT_RETENTION_CRITICAL_DAYS`), Routine 90 Tage (`AUDIT_RETENTION_ROUTINE_DAYS`). Audit-Fund (major): fehlende Invariante criticalDays≥routineDays → bei Vertauschung würden Forensik-Events FRÜHER gelöscht → harte Prüfung in pruneAuditLog + env-`.refine` (fail-fast). Robustheit: explizite ROUTINE+CRITICAL-Allowlists (unbekannte Events werden NIE gelöscht, fail-safe); alle 26 Event-Typen genau einer Klasse zugeordnet (maschinell verifiziert).
+
+**Filter/Sortierung/Datum** im Audit-Viewer existierten bereits — nur das Pruning fehlte. **Settings-Tab** bleibt bewusst ausgegraut (Platzhalter für Admin-Account-Verwaltung, später).
+
+Gesamt: typecheck/lint/**132+18 Unit + 16 Integration**/Build grün. Kein Schema-Change → keine Migration. **Offen (nit):** Sanity-Cap/Dry-Run im prune-Skript (durch Invariante+Allowlist entschärft). **Offen (Ops):** `audit:prune` + `licenses:expire` brauchen einen Server-Cron-Trigger (beim Deploy einzurichten).
+
+---
+
 ## 2026-05-29 — shared-types: Wire-Typen zentralisiert
 
 Den im Voll-Audit bewusst zurückgestellten Punkt nachgeholt (auf Jans Wunsch — saubere Basis, bevor mehrere JS/TS-Apps das SDK einbinden). Die Over-the-wire-Typen waren server- und SDK-seitig dupliziert (stimmten überein, konnten aber künftig still divergieren). Jetzt eine Quelle der Wahrheit in `@license-engine/shared-types`:
