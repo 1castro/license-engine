@@ -7,6 +7,7 @@ import {
   type License,
 } from '@prisma/client';
 import { z } from 'zod';
+import type { SeatInfo } from '@license-engine/shared-types';
 import { prisma } from '../prisma';
 import { writeAuditLog, AuditEventType, type AuditActorType } from '../audit';
 import { hashBindingValue } from './binding-hash';
@@ -220,13 +221,9 @@ export async function releaseActivation(
 // Seat usage (for activate/recheck responses + admin/app dashboards)
 // -----------------------------------------------------------------------------
 
-export interface SeatInfo {
-  type: BindingType;
-  /** Currently active activations of this type. */
-  used: number;
-  /** Configured cap, or null if unlimited. */
-  max: number | null;
-}
+// SeatInfo is a wire type — defined once in @license-engine/shared-types and
+// re-exported here so existing imports from this module keep working.
+export type { SeatInfo };
 
 /**
  * Counts active activations per binding type that the policy actually governs

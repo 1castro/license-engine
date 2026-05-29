@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { RecheckResponse } from '@license-engine/shared-types';
 import { ActivationStatus, BindingType, LicenseStatus, type License } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { extractIp, hashIp, writeAuditLog, AuditEventType } from '@/lib/audit';
@@ -104,10 +105,13 @@ async function handleRecheck(req: Request): Promise<NextResponse> {
   }
 
   if (license.status === LicenseStatus.revoked) {
-    return NextResponse.json({ status: 'revoked', revokedAt: license.revokedAt?.toISOString() ?? null });
+    return NextResponse.json({
+      status: 'revoked',
+      revokedAt: license.revokedAt?.toISOString() ?? null,
+    } satisfies RecheckResponse);
   }
   if (license.status === LicenseStatus.expired) {
-    return NextResponse.json({ status: 'expired' });
+    return NextResponse.json({ status: 'expired' } satisfies RecheckResponse);
   }
   if (license.expiresAt && license.expiresAt.getTime() <= Date.now()) {
     // Lazy-expire: flip the DB row and write a single LicenseExpired audit entry
@@ -129,7 +133,7 @@ async function handleRecheck(req: Request): Promise<NextResponse> {
         ip,
       });
     }
-    return NextResponse.json({ status: 'expired' });
+    return NextResponse.json({ status: 'expired' } satisfies RecheckResponse);
   }
 
   const featureFlags = Array.isArray(license.featureFlags)
@@ -222,5 +226,5 @@ async function handleRecheck(req: Request): Promise<NextResponse> {
     expiresAt: signed.expiresAt.toISOString(),
     recheckIntervalHours: product.recheckIntervalHours,
     seats,
-  });
+  } satisfies RecheckResponse);
 }

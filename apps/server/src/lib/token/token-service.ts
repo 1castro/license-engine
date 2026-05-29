@@ -1,6 +1,10 @@
 import { SignJWT, jwtVerify, errors as joseErrors, type JWTPayload } from 'jose';
 import { randomUUID } from 'node:crypto';
 import type { KeyObject } from 'node:crypto';
+import type {
+  LicenseTokenBinding,
+  LicenseTokenClaims as WireLicenseTokenClaims,
+} from '@license-engine/shared-types';
 import { getEnv } from '../env';
 import { getActiveSigningKey, getAllPublicKeysForProduct, SIGNING_ALGORITHM } from '../signing/signing-key-service';
 
@@ -16,25 +20,13 @@ import { getActiveSigningKey, getAllPublicKeysForProduct, SIGNING_ALGORITHM } fr
  * right key from the product's keychain (active + previously rotated).
  */
 
-export interface LicenseTokenBinding {
-  type: string;
-  hash: string;
-}
+// LicenseTokenBinding is a wire type — single source of truth in shared-types.
+export type { LicenseTokenBinding };
 
-export interface LicenseTokenClaims extends JWTPayload {
-  /** License.id */
-  sub: string;
-  /** Product.slug */
-  aud: string;
-  /** Issuer from env */
-  iss: string;
-  /** End-user license key for client-side display only. */
-  licenseKey: string;
-  /** Active feature flags for this license. */
-  features: string[];
-  /** Bindings the client successfully passed at activation time, hashed. */
-  bindings: LicenseTokenBinding[];
-}
+// The wire claims (shared-types) intersected with jose's JWTPayload: the server
+// signs/verifies through jose, so its claims must also satisfy JWTPayload, while
+// the on-the-wire shape stays identical to what the SDK reads.
+export type LicenseTokenClaims = WireLicenseTokenClaims & JWTPayload;
 
 export interface SignLicenseTokenInput {
   license: {

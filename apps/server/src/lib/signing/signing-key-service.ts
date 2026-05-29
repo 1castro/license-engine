@@ -1,5 +1,6 @@
 import { generateKeyPair, exportPKCS8, exportSPKI, importPKCS8, importSPKI } from 'jose';
 import type { KeyObject } from 'node:crypto';
+import type { PublicKeyEntry } from '@license-engine/shared-types';
 import { prisma } from '../prisma';
 import { envelopeEncrypt, envelopeDecrypt } from '../crypto/envelope';
 import { writeAuditLog, AuditEventType } from '../audit';
@@ -154,16 +155,9 @@ export async function getAllPublicKeysForProduct(
  * discovery endpoint. Includes both active and rotated-out keys so SDKs that
  * cache them can verify older tokens during a rotation grace window.
  */
-export interface PublicKeyEntry {
-  kid: string;
-  productId: string;
-  productSlug: string;
-  algorithm: 'Ed25519';
-  publicKey: string; // SPKI PEM
-  isActive: boolean;
-  createdAt: string;
-  rotatedAt: string | null;
-}
+// PublicKeyEntry is a wire type — defined once in @license-engine/shared-types
+// and re-exported here so existing imports from this module keep working.
+export type { PublicKeyEntry };
 
 export async function listAllPublicKeys(): Promise<PublicKeyEntry[]> {
   const rows = await prisma.signingKey.findMany({

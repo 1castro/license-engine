@@ -1,73 +1,25 @@
 /**
- * Public types for the License Engine SDK.
+ * SDK types.
  *
- * These mirror what the server returns over the wire — keep them in sync
- * with the API contract. (A future iteration may move them into
- * `@license-engine/shared-types` once the API stabilizes.)
+ * The over-the-wire types (what the server returns / the JWT claims) live in
+ * `@license-engine/shared-types` — the single source of truth shared with the
+ * server. We re-export them here so existing `./types` imports keep working.
+ * Only genuinely SDK-internal types (storage, client config, the validate()
+ * result) are defined locally.
  */
 
-export type BindingType = 'domain' | 'device' | 'account' | 'installation';
+export type {
+  BindingType,
+  BindingInput,
+  SeatInfo,
+  ActivateResponse,
+  RecheckResponse,
+  PublicKeyEntry,
+  LicenseTokenBinding,
+  LicenseTokenClaims,
+} from '@license-engine/shared-types';
 
-export interface BindingInput {
-  type: BindingType;
-  value: string;
-  metadata?: Record<string, unknown>;
-}
-
-/** Seat usage per binding type (e.g. "37 of 100 account seats used"). */
-export interface SeatInfo {
-  type: BindingType;
-  used: number;
-  /** Configured cap, or null if unlimited. */
-  max: number | null;
-}
-
-/** Server-side `/api/v1/activate` response. */
-export interface ActivateResponse {
-  token: string;
-  expiresAt: string; // ISO timestamp
-  recheckIntervalHours: number;
-  /** Seat usage for the binding types governed by the license policy. */
-  seats?: SeatInfo[];
-}
-
-/** Server-side `/api/v1/recheck` response. */
-export type RecheckResponse =
-  | {
-      status: 'active';
-      token: string;
-      expiresAt: string;
-      recheckIntervalHours: number;
-      seats?: SeatInfo[];
-    }
-  | { status: 'revoked'; revokedAt: string | null }
-  | { status: 'expired' };
-
-/** Single key entry from `/api/v1/.well-known/public-keys`. */
-export interface PublicKeyEntry {
-  kid: string;
-  productId: string;
-  productSlug: string;
-  algorithm: 'Ed25519';
-  publicKey: string; // SPKI PEM
-  isActive: boolean;
-  createdAt: string;
-  rotatedAt: string | null;
-}
-
-/** Claims we expect inside a verified license JWT. */
-export interface LicenseTokenClaims {
-  sub: string; // license id
-  aud: string; // product slug
-  iss: string;
-  iat: number;
-  nbf: number;
-  exp: number;
-  jti: string;
-  licenseKey: string;
-  features: string[];
-  bindings: Array<{ type: BindingType; hash: string }>;
-}
+import type { BindingInput } from '@license-engine/shared-types';
 
 /** Configuration handed to `createLicenseClient`. */
 export interface LicenseClientConfig {

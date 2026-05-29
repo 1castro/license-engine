@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { ActivateResponse } from '@license-engine/shared-types';
 import { LicenseStatus, type License } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getLogger } from '@/lib/logger';
@@ -171,5 +172,5 @@ async function handleActivate(
     expiresAt: signed.expiresAt.toISOString(),
     recheckIntervalHours: license.product.recheckIntervalHours,
     seats,
-  });
+  } satisfies ActivateResponse);
 }
