@@ -128,6 +128,41 @@ describe('POST /api/v1/activate — rejection reasons', () => {
     expect(rej?.targetId).toBeNull();
   });
 
+  it('audits an activation against a revoked license (lizenz_inaktiv, 403)', async () => {
+    const { license } = await seedLicenseChain({ maxPerType: { account: 2 } });
+    await prisma.license.update({
+      where: { id: license.id },
+      data: { status: 'revoked', revokedAt: new Date() },
+    });
+    const res = await callActivate(
+      { licenseKey: license.licenseKey, productSlug: 'fahrdienst', bindings: [account('u-a', 'A')] },
+      '203.0.113.70',
+    );
+    expect(res.status).toBe(403);
+    expect((res.json.error as { code: string }).code).toBe('license_not_active');
+    const rej = await prisma.auditLog.findFirst({
+      where: { eventType: 'activation.rejected', targetId: license.id },
+    });
+    expect((rej?.metadata as { reason: string }).reason).toBe('lizenz_inaktiv');
+  });
+
+  it('audits an activation against an expired license (lizenz_abgelaufen, 403)', async () => {
+    const { license } = await seedLicenseChain({ maxPerType: { account: 2 } });
+    await prisma.license.update({
+      where: { id: license.id },
+      data: { expiresAt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    });
+    const res = await callActivate(
+      { licenseKey: license.licenseKey, productSlug: 'fahrdienst', bindings: [account('u-a', 'A')] },
+      '203.0.113.71',
+    );
+    expect(res.status).toBe(403);
+    const rej = await prisma.auditLog.findFirst({
+      where: { eventType: 'activation.rejected', targetId: license.id },
+    });
+    expect((rej?.metadata as { reason: string }).reason).toBe('lizenz_abgelaufen');
+  });
+
   it('does NOT audit a successful activation or malformed transport errors', async () => {
     const { license } = await seedLicenseChain({ maxPerType: { account: 2 } });
     const ok = await callActivate(

@@ -1,12 +1,15 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// These tests exercise the API-KEY auth path. authorizeAdminRoute tries a
-// NextAuth session first, which calls next/headers() — unavailable outside a
-// real request scope. Force "no session" so the API-key branch is taken.
+// authorizeAdminRoute tries a NextAuth session first, which calls next/headers()
+// — unavailable outside a real request scope. Mock getServerSession so we can
+// drive both auth paths: default "no session" (→ API-key branch), or an injected
+// admin session for the admin-bypass test.
+const { getServerSessionMock } = vi.hoisted(() => ({ getServerSessionMock: vi.fn() }));
 vi.mock('next-auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('next-auth')>()),
-  getServerSession: async () => null,
+  getServerSession: getServerSessionMock,
 }));
+beforeEach(() => getServerSessionMock.mockResolvedValue(null));
 
 import { seedProduct, seedCustomer, seedLicense, seedApiKey } from './helpers';
 
@@ -77,6 +80,20 @@ describe('Multi-tenant isolation — license-bound API keys', () => {
     const { licA } = await twoLicenses();
     // licenses:write is NOT in LICENSE_BOUND_ALLOWED_SCOPES → must be rejected.
     await expect(seedApiKey(['licenses:write'], licA.id)).rejects.toThrow();
+  });
+
+  it('lets an admin SESSION read any license (no binding restriction)', async () => {
+    const { licB } = await twoLicenses();
+    getServerSessionMock.mockResolvedValue({
+      user: { id: 'admin-1', email: 'admin@test.local', role: 'owner' },
+    });
+    const { GET } = await import('@/app/api/admin/v1/licenses/[id]/activations/route');
+    // No API key header — auth comes from the (mocked) admin session.
+    const req = new Request(`http://localhost/api/admin/v1/licenses/${licB.id}/activations`, {
+      headers: { 'x-forwarded-for': '203.0.113.201' },
+    });
+    const res = await GET(req, { params: Promise.resolve({ id: licB.id }) });
+    expect(res.status).toBe(200);
   });
 });
 

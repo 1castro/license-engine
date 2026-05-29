@@ -13,6 +13,8 @@ interface Bucket {
 export interface RateLimiter {
   /** Returns true if the action is allowed; consumes one token if so. */
   tryConsume(key: string): boolean;
+  /** Clears all buckets. Used by tests to keep runs deterministic. */
+  reset(): void;
 }
 
 export function createInMemoryRateLimiter(opts: {
@@ -40,6 +42,9 @@ export function createInMemoryRateLimiter(opts: {
       bucket.tokens -= 1;
       buckets.set(key, bucket);
       return true;
+    },
+    reset(): void {
+      buckets.clear();
     },
   };
 }

@@ -55,6 +55,11 @@ const envSchema = z
   .refine((data) => data.ENCRYPTION_KEY || data.ENCRYPTION_KEY_FILE, {
     message: 'Either ENCRYPTION_KEY or ENCRYPTION_KEY_FILE must be set.',
     path: ['ENCRYPTION_KEY'],
+  })
+  .refine((data) => data.AUDIT_RETENTION_CRITICAL_DAYS >= data.AUDIT_RETENTION_ROUTINE_DAYS, {
+    message:
+      'AUDIT_RETENTION_CRITICAL_DAYS must be >= AUDIT_RETENTION_ROUTINE_DAYS — otherwise security events would be pruned sooner than routine ones.',
+    path: ['AUDIT_RETENTION_CRITICAL_DAYS'],
   });
 
 export type AppEnv = z.infer<typeof envSchema>;
