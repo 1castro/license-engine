@@ -19,7 +19,11 @@ export async function RejectedAttemptsView({ entries }: { entries: RejectedEntry
 
   function reasonLabel(e: RejectedEntry): string {
     if (e.reason === 'limit_erreicht') {
-      return e.bindingType === 'domain' ? t('reasonForeignDomain') : t('reasonLimit');
+      // Domain max_exceeded means "domain seat quota full", NOT an allowlist
+      // rejection — the engine has no domain authorization check. Label it as a
+      // limit, not as "unauthorized domain", so admins don't misread a quota
+      // overflow (upsell case) as an attack.
+      return e.bindingType === 'domain' ? t('reasonDomainLimit') : t('reasonLimit');
     }
     switch (e.reason) {
       case 'key_ungültig':
@@ -33,7 +37,7 @@ export async function RejectedAttemptsView({ entries }: { entries: RejectedEntry
       case 'pflichtbindung_fehlt':
         return t('reasonMissingBinding');
       default:
-        return e.reason;
+        return t('reasonUnknown');
     }
   }
 

@@ -14,8 +14,8 @@ import { Badge } from '@/components/ui/badge';
 import {
   getActiveLicensesOverview,
   getDashboardCounts,
-  countRejectedSince,
   latestRejectedAt,
+  REJECT_WINDOW_DAYS,
 } from '@/lib/services/dashboard-service';
 import { DashboardRejectsBanner } from './_components/dashboard-rejects-banner';
 
@@ -38,10 +38,9 @@ export default async function AdminDashboardPage({
   const session = await getServerSession(authOptions);
   const t = await getTranslations('dashboard');
 
-  const [counts, overview, rejectedTotal, latestReject] = await Promise.all([
+  const [counts, overview, latestReject] = await Promise.all([
     getDashboardCounts(),
     getActiveLicensesOverview(),
-    countRejectedSince(null),
     latestRejectedAt(),
   ]);
 
@@ -62,7 +61,7 @@ export default async function AdminDashboardPage({
         count={counts.rejectedWindow}
         latestRejectedAt={latestReject ? latestReject.toISOString() : null}
         href={auditHref}
-        message={t('bannerRejects', { count: counts.rejectedWindow })}
+        message={t('bannerRejects', { count: counts.rejectedWindow, days: REJECT_WINDOW_DAYS })}
         closeLabel={t('bannerClose')}
       />
 
@@ -71,8 +70,8 @@ export default async function AdminDashboardPage({
         <MetricTile label={t('metricCustomers')} value={counts.customers} />
         <MetricTile label={t('metricProducts')} value={counts.products} />
         <MetricTile
-          label={t('metricRejected')}
-          value={rejectedTotal}
+          label={t('metricRejected', { days: REJECT_WINDOW_DAYS })}
+          value={counts.rejectedWindow}
           highlight={counts.rejectedWindow > 0}
         />
       </div>

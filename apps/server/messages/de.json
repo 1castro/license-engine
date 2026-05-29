@@ -30,14 +30,14 @@
     "metricActiveLicenses": "Aktive Lizenzen",
     "metricCustomers": "Kunden",
     "metricProducts": "Produkte",
-    "metricRejected": "Abgewiesene Versuche",
+    "metricRejected": "Abgewiesen ({days} Tage)",
     "activeLicensesTitle": "Aktive Lizenzen",
     "colCustomer": "Kunde",
     "colProduct": "Produkt",
     "colSeats": "Plätze",
     "colRejected": "Abgewiesen",
     "noLicenses": "Noch keine aktiven Lizenzen.",
-    "bannerRejects": "{count} abgewiesene Aktivierungsversuche (letzte 7 Tage) — ansehen",
+    "bannerRejects": "{count} abgewiesene Aktivierungsversuche (letzte {days} Tage) — ansehen",
     "bannerClose": "Hinweis schließen"
   },
   "common": {
@@ -221,8 +221,9 @@
     "reasonInactive": "Lizenz inaktiv",
     "reasonExpired": "Lizenz abgelaufen",
     "reasonLimit": "Platz-Limit erreicht",
-    "reasonForeignDomain": "Nicht autorisierte Domain",
-    "reasonMissingBinding": "Pflicht-Bindung fehlt"
+    "reasonMissingBinding": "Pflicht-Bindung fehlt",
+    "reasonDomainLimit": "Domain-Limit erreicht",
+    "reasonUnknown": "Unbekannt"
   },
   "auditLog": {
     "title": "Audit-Log",

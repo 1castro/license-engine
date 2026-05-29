@@ -30,14 +30,14 @@
     "metricActiveLicenses": "Active licenses",
     "metricCustomers": "Customers",
     "metricProducts": "Products",
-    "metricRejected": "Rejected attempts",
+    "metricRejected": "Rejected ({days} days)",
     "activeLicensesTitle": "Active licenses",
     "colCustomer": "Customer",
     "colProduct": "Product",
     "colSeats": "Seats",
     "colRejected": "Rejected",
     "noLicenses": "No active licenses yet.",
-    "bannerRejects": "{count} rejected activation attempts (last 7 days) — view",
+    "bannerRejects": "{count} rejected activation attempts (last {days} days) — view",
     "bannerClose": "Dismiss"
   },
   "common": {
@@ -221,8 +221,9 @@
     "reasonInactive": "License inactive",
     "reasonExpired": "License expired",
     "reasonLimit": "Seat limit reached",
-    "reasonForeignDomain": "Unauthorized domain",
-    "reasonMissingBinding": "Required binding missing"
+    "reasonMissingBinding": "Required binding missing",
+    "reasonDomainLimit": "Domain limit reached",
+    "reasonUnknown": "Unknown"
   },
   "auditLog": {
     "title": "Audit log",

@@ -12,7 +12,11 @@ import type { SeatInfo } from '@license-engine/shared-types';
  */
 
 const REJECTED = AuditEventType.ActivationRejected;
-const REJECT_WINDOW_DAYS = 7;
+/** Rolling window (days) for "recent" rejection counts. Also fed to the i18n
+ *  banner text via {days}, so the displayed number never drifts from this. */
+export const REJECT_WINDOW_DAYS = 7;
+/** Cap on the active-license overview to bound the dashboard's query fan-out. */
+const OVERVIEW_LIMIT = 50;
 
 export interface AttemptedBinding {
   type: string;
@@ -108,7 +112,7 @@ async function enrich(rows: AuditLog[]): Promise<RejectedEntry[]> {
 /** Count of rejected attempts strictly after `since` (null → all time). */
 export function countRejectedSince(since: Date | null): Promise<number> {
   return prisma.auditLog.count({
-    where: { eventType: REJECTED, ...(since ? { timestamp: { gt: since } } : {}) },
+    where: { eventType: REJECTED, ...(since ? { timestamp: { gte: since } } : {}) },
   });
 }
 
@@ -152,12 +156,26 @@ export async function getActiveLicensesOverview(): Promise<ActiveLicenseOverview
   const licenses = await prisma.license.findMany({
     where: { status: LicenseStatus.active },
     orderBy: { createdAt: 'desc' },
+    take: OVERVIEW_LIMIT,
     include: {
       customer: { select: { name: true } },
       product: { select: { name: true } },
     },
   });
   const since = windowStart();
+  // One grouped query for all reject counts instead of one COUNT per license.
+  const rejectGroups = await prisma.auditLog.groupBy({
+    by: ['targetId'],
+    where: {
+      eventType: REJECTED,
+      timestamp: { gte: since },
+      targetId: { in: licenses.map((l) => l.id) },
+    },
+    _count: { _all: true },
+  });
+  const rejectByLicense = new Map(
+    rejectGroups.map((g) => [g.targetId, g._count._all] as const),
+  );
   return Promise.all(
     licenses.map(async (l) => ({
       id: l.id,
@@ -165,9 +183,7 @@ export async function getActiveLicensesOverview(): Promise<ActiveLicenseOverview
       customerName: l.customer.name,
       productName: l.product.name,
       seats: await getSeatUsage(l.id, parseBindingPolicy(l.bindingPolicy)),
-      rejectedCount: await prisma.auditLog.count({
-        where: { eventType: REJECTED, targetId: l.id, timestamp: { gte: since } },
-      }),
+      rejectedCount: rejectByLicense.get(l.id) ?? 0,
     })),
   );
 }
