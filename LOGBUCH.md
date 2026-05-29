@@ -4,6 +4,17 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-05-29 — shared-types: Wire-Typen zentralisiert
+
+Den im Voll-Audit bewusst zurückgestellten Punkt nachgeholt (auf Jans Wunsch — saubere Basis, bevor mehrere JS/TS-Apps das SDK einbinden). Die Over-the-wire-Typen waren server- und SDK-seitig dupliziert (stimmten überein, konnten aber künftig still divergieren). Jetzt eine Quelle der Wahrheit in `@license-engine/shared-types`:
+- `ActivateResponse`, `RecheckResponse`, `SeatInfo`, `PublicKeyEntry`, `BindingType`, `BindingInput`, `LicenseTokenClaims`, `LicenseTokenBinding` zentral.
+- SDK re-exportiert sie aus shared (SDK-interne Typen bleiben lokal); Server importiert + re-exportiert sie (bestehende Modul-Importe unverändert). `LicenseTokenClaims = WireClaims & jose.JWTPayload` (Sign/Verify-Kopplung erhalten).
+- activate/recheck-Responses mit `satisfies` gegen den Wire-Vertrag geprüft → Abweichung knallt beim Compile.
+- Divergenz bereinigt: `LicenseTokenBinding.type` war serverseitig `string`, jetzt einheitlich `BindingType`.
+- Reiner Typ-Refactor, kein Laufzeitverhalten. typecheck/lint/132+18 Tests/Build grün. Docker-Build baut shared-types bereits vor dem Server (kein Pipeline-Eingriff nötig). Commit `6b5f584`. Noch nicht deployt (kein Verhaltensänderung — geht beim nächsten funktionalen Deploy mit).
+
+---
+
 ## 2026-05-28 — Portal-Self-Service-Feinschliff + Voll-Audit & Härtung (v1.2.0)
 
 ### Teil 1 — Portal-Self-Service laientauglich (deployed)
