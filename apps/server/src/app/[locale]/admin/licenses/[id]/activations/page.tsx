@@ -62,6 +62,13 @@ export default async function LicenseActivationsPage({
         <p className="text-sm text-neutral-500">
           {license.customer.name} · {license.product.name}
         </p>
+        {(license.planName || license.priceDisplay) && (
+          <p className="text-sm text-neutral-600">
+            {[license.planName, license.priceDisplay, license.billingInterval]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        )}
       </div>
 
       <ActivationsView licenseId={id} activations={items} seats={seats} />

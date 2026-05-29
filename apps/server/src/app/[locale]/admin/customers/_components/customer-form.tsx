@@ -34,7 +34,7 @@ const customerFormSchema = z.object({
   company: z.string().max(200).optional().default(''),
   notes: z.string().max(4000).optional().default(''),
   externalRef: z.string().max(200).optional().default(''),
-  externalSource: z.enum(['manual', 'stripe', 'paddle']),
+  externalSource: z.enum(['manual', 'stripe', 'paddle', 'polar']),
 });
 
 type CustomerFormValues = z.infer<typeof customerFormSchema>;
@@ -46,7 +46,7 @@ export interface CustomerFormInitial {
   company: string | null;
   notes: string | null;
   externalRef: string | null;
-  externalSource: 'manual' | 'stripe' | 'paddle';
+  externalSource: 'manual' | 'stripe' | 'paddle' | 'polar';
 }
 
 interface CreateProps {
@@ -189,6 +189,7 @@ export function CustomerForm(props: CreateProps | EditProps) {
                     <SelectItem value="manual">{t('sourceManual')}</SelectItem>
                     <SelectItem value="stripe">{t('sourceStripe')}</SelectItem>
                     <SelectItem value="paddle">{t('sourcePaddle')}</SelectItem>
+                    <SelectItem value="polar">Polar</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />

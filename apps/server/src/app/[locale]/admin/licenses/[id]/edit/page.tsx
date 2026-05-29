@@ -81,6 +81,9 @@ export default async function EditLicensePage({
           bindingPolicy,
           externalRef: license.externalRef,
           externalSource: license.externalSource,
+          planName: license.planName,
+          priceDisplay: license.priceDisplay,
+          billingInterval: license.billingInterval,
         }}
       />
     </div>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, type Control, type FieldValues, type Path } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
 import { z } from 'zod';
@@ -51,13 +51,25 @@ export interface LicenseFormInitial {
   featureFlags: string[];
   bindingPolicy: Record<string, unknown>;
   externalRef: string | null;
-  externalSource: 'manual' | 'stripe' | 'paddle';
+  externalSource: 'manual' | 'stripe' | 'paddle' | 'polar';
+  planName: string | null;
+  priceDisplay: string | null;
+  billingInterval: string | null;
 }
+
+// Display-only billing metadata (mirrored from the PSP / manually maintained).
+// Never payment logic — purely so the admin/customer sees what a license costs.
+const billingDisplayFields = {
+  planName: z.string().max(120).optional().default(''),
+  priceDisplay: z.string().max(120).optional().default(''),
+  billingInterval: z.string().max(40).optional().default(''),
+};
 
 const baseSchema = z.object({
   bindingPolicy: z.record(z.unknown()).default({}),
   featureFlags: z.array(z.string()).default([]),
   expiresAt: z.string().max(40).optional().default(''),
+  ...billingDisplayFields,
 });
 
 const createSchema = baseSchema.extend({
@@ -65,7 +77,7 @@ const createSchema = baseSchema.extend({
   productId: z.string().min(1),
   type: z.enum(['subscription', 'perpetual']),
   externalRef: z.string().max(200).optional().default(''),
-  externalSource: z.enum(['manual', 'stripe', 'paddle']),
+  externalSource: z.enum(['manual', 'stripe', 'paddle', 'polar']),
 });
 
 type CreateValues = z.infer<typeof createSchema>;
@@ -104,6 +116,61 @@ export function LicenseForm(props: CreateProps | EditProps) {
 /** Binding types the policy editor exposes, in display order. */
 const BINDING_TYPES = ['domain', 'account', 'device', 'installation'] as const;
 
+/** Adds the non-empty display-billing fields to an outgoing license payload. */
+function addBillingDisplay(
+  payload: Record<string, unknown>,
+  values: { planName?: string; priceDisplay?: string; billingInterval?: string },
+) {
+  if (values.planName?.trim()) payload.planName = values.planName.trim();
+  if (values.priceDisplay?.trim()) payload.priceDisplay = values.priceDisplay.trim();
+  if (values.billingInterval?.trim()) payload.billingInterval = values.billingInterval.trim();
+}
+
+/**
+ * Display-only billing fields (plan name, price string, interval). Shared by the
+ * create and edit forms. These are NOT payment logic — purely what the admin /
+ * customer sees; later typically mirrored from the PSP by the sync module.
+ */
+function BillingDisplayFields<T extends FieldValues>({ control }: { control: Control<T> }) {
+  const fields: Array<{ name: string; label: string; placeholder: string }> = [
+    { name: 'planName', label: 'Plan-Name', placeholder: 'z. B. Pro' },
+    { name: 'priceDisplay', label: 'Preis (Anzeige)', placeholder: 'z. B. 29 €/Monat' },
+    { name: 'billingInterval', label: 'Intervall', placeholder: 'z. B. monthly / yearly / once' },
+  ];
+  return (
+    <div className="space-y-2 rounded-lg border border-neutral-200 p-4">
+      <p className="text-sm font-medium">Abrechnung (nur Anzeige)</p>
+      <p className="text-xs text-muted-foreground">
+        Reine Anzeige-Infos — die Abrechnung selbst läuft beim Zahlungsdienstleister.
+        Werden später automatisch von dort gespiegelt.
+      </p>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {fields.map((f) => (
+          <FormField
+            key={f.name}
+            control={control}
+            name={f.name as Path<T>}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{f.label}</FormLabel>
+                <FormControl>
+                  <Input
+                    autoComplete="off"
+                    placeholder={f.placeholder}
+                    {...field}
+                    value={(field.value as string | undefined) ?? ''}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CreateLicenseForm({
   customers,
   products,
@@ -127,6 +194,9 @@ function CreateLicenseForm({
       bindingPolicy: {},
       externalRef: '',
       externalSource: 'manual',
+      planName: '',
+      priceDisplay: '',
+      billingInterval: '',
     },
   });
 
@@ -153,6 +223,7 @@ function CreateLicenseForm({
     if (values.externalRef.trim().length > 0) {
       payload.externalRef = values.externalRef.trim();
     }
+    addBillingDisplay(payload, values);
 
     try {
       const res = await fetch('/api/admin/v1/licenses', {
@@ -297,6 +368,7 @@ function CreateLicenseForm({
                     <SelectItem value="manual">Manuell</SelectItem>
                     <SelectItem value="stripe">Stripe</SelectItem>
                     <SelectItem value="paddle">Paddle</SelectItem>
+                    <SelectItem value="polar">Polar</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -342,6 +414,8 @@ function CreateLicenseForm({
             <BindingPolicyField value={field.value} onChange={field.onChange} />
           )}
         />
+
+        <BillingDisplayFields control={form.control} />
 
         {submitError && (
           <Alert variant="destructive">
@@ -392,6 +466,9 @@ function EditLicenseForm({
       expiresAt: initial.expiresAt
         ? toLocalDatetimeInput(new Date(initial.expiresAt))
         : '',
+      planName: initial.planName ?? '',
+      priceDisplay: initial.priceDisplay ?? '',
+      billingInterval: initial.billingInterval ?? '',
     },
   });
 
@@ -406,6 +483,12 @@ function EditLicenseForm({
       values.expiresAt.trim().length > 0
         ? new Date(values.expiresAt).toISOString()
         : null;
+    // Display-billing fields: send trimmed value, or null to clear.
+    payload.planName = values.planName?.trim() ? values.planName.trim() : null;
+    payload.priceDisplay = values.priceDisplay?.trim() ? values.priceDisplay.trim() : null;
+    payload.billingInterval = values.billingInterval?.trim()
+      ? values.billingInterval.trim()
+      : null;
 
     try {
       const res = await fetch(`/api/admin/v1/licenses/${initial.id}`, {
@@ -492,6 +575,8 @@ function EditLicenseForm({
             <BindingPolicyField value={field.value} onChange={field.onChange} />
           )}
         />
+
+        <BillingDisplayFields control={form.control} />
 
         {submitError && (
           <Alert variant="destructive">

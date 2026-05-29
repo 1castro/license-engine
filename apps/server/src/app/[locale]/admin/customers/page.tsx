@@ -106,7 +106,7 @@ export default async function AdminCustomersPage({
 
 type CustomersT = Awaited<ReturnType<typeof getTranslations<'customers'>>>;
 
-function sourceLabel(t: CustomersT, source: 'manual' | 'stripe' | 'paddle'): string {
+function sourceLabel(t: CustomersT, source: 'manual' | 'stripe' | 'paddle' | 'polar'): string {
   switch (source) {
     case 'manual':
       return t('sourceManual');
@@ -114,5 +114,7 @@ function sourceLabel(t: CustomersT, source: 'manual' | 'stripe' | 'paddle'): str
       return t('sourceStripe');
     case 'paddle':
       return t('sourcePaddle');
+    case 'polar':
+      return 'Polar';
   }
 }

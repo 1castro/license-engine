@@ -32,6 +32,8 @@ export async function GET(req: Request) {
     customerId: url.searchParams.get('customerId') ?? undefined,
     productId: url.searchParams.get('productId') ?? undefined,
     status: url.searchParams.get('status') ?? undefined,
+    externalRef: url.searchParams.get('externalRef') ?? undefined,
+    externalSource: url.searchParams.get('externalSource') ?? undefined,
   };
   const parsed = licenseListFilterSchema.safeParse(filterCandidate);
   if (!parsed.success) {

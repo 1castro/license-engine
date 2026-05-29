@@ -26,6 +26,14 @@ const expiresAtSchema = z
 
 const featureFlagsSchema = z.array(z.string().min(1).max(64));
 
+// Display-only billing metadata (mirrored from the PSP) — never payment logic.
+// nullable: an update may pass null to clear a field; undefined leaves it untouched.
+const billingDisplaySchema = {
+  planName: z.string().min(1).max(120).nullable().optional(),
+  priceDisplay: z.string().min(1).max(120).nullable().optional(),
+  billingInterval: z.string().min(1).max(40).nullable().optional(),
+};
+
 // Strict write-path validation of the binding policy: required[] must be valid
 // BindingTypes, maxPerType must be positive ints. Unknown keys are dropped.
 // (Same schema the activation flow reads, so write and read can't diverge.)
@@ -39,12 +47,14 @@ export const licenseCreateSchema = z.object({
   bindingPolicy: bindingPolicySchema,
   externalRef: z.string().min(1).max(200).optional(),
   externalSource: z.nativeEnum(ExternalSource).default('manual'),
+  ...billingDisplaySchema,
 });
 
 export const licenseUpdateSchema = z.object({
   expiresAt: expiresAtSchema,
   featureFlags: featureFlagsSchema.optional(),
   bindingPolicy: bindingPolicySchema.optional(),
+  ...billingDisplaySchema,
 });
 
 export const licenseRevokeSchema = z.object({
@@ -55,6 +65,10 @@ export const licenseListFilterSchema = z.object({
   customerId: cuidString.optional(),
   productId: cuidString.optional(),
   status: z.nativeEnum(LicenseStatus).optional(),
+  // Lets a webhook sync module find an existing license by its PSP reference
+  // (then PATCH expiresAt to renew / revoke) — idempotent over (source, ref).
+  externalRef: z.string().min(1).max(200).optional(),
+  externalSource: z.nativeEnum(ExternalSource).optional(),
 });
 
 export type LicenseCreateInput = z.infer<typeof licenseCreateSchema>;
@@ -120,6 +134,8 @@ export function listLicenses(filter: LicenseListFilter = {}): Promise<License[]>
   if (filter.customerId) where.customerId = filter.customerId;
   if (filter.productId) where.productId = filter.productId;
   if (filter.status) where.status = filter.status;
+  if (filter.externalRef) where.externalRef = filter.externalRef;
+  if (filter.externalSource) where.externalSource = filter.externalSource;
   return prisma.license.findMany({ where, orderBy: { createdAt: 'desc' } });
 }
 
@@ -188,6 +204,9 @@ export async function createLicense(
           bindingPolicy,
           externalRef: input.externalRef,
           externalSource: input.externalSource,
+          planName: input.planName,
+          priceDisplay: input.priceDisplay,
+          billingInterval: input.billingInterval,
         },
       });
       await writeAuditLog({
@@ -246,6 +265,10 @@ export async function updateLicense(
   if (input.bindingPolicy !== undefined) {
     data.bindingPolicy = input.bindingPolicy as Prisma.InputJsonValue;
   }
+  // Display-only billing metadata (mirrored from the PSP). null clears the field.
+  if (input.planName !== undefined) data.planName = input.planName;
+  if (input.priceDisplay !== undefined) data.priceDisplay = input.priceDisplay;
+  if (input.billingInterval !== undefined) data.billingInterval = input.billingInterval;
 
   const license = await prisma.license.update({ where: { id }, data });
   await writeAuditLog({

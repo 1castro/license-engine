@@ -83,6 +83,18 @@ export default async function PortalLicenseDetailPage({
               {license.expiresAt ? license.expiresAt.toLocaleDateString('de-DE') : 'Unbefristet'}
             </dd>
           </div>
+          {license.planName && (
+            <div>
+              <dt className="text-xs uppercase text-neutral-500">Plan</dt>
+              <dd>{license.planName}</dd>
+            </div>
+          )}
+          {license.priceDisplay && (
+            <div>
+              <dt className="text-xs uppercase text-neutral-500">Preis</dt>
+              <dd>{license.priceDisplay}</dd>
+            </div>
+          )}
           {features.length > 0 && (
             <div className="sm:col-span-3">
               <dt className="text-xs uppercase text-neutral-500">Features</dt>

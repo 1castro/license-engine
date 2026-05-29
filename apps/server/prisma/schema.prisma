@@ -33,6 +33,7 @@ enum ExternalSource {
   manual
   stripe
   paddle
+  polar
 }
 
 enum LicenseType {
@@ -246,6 +247,13 @@ model License {
   /// Reference into an external system (e.g. Stripe subscription id) for sync.
   externalRef    String?
   externalSource ExternalSource @default(manual)
+
+  /// Display-only billing metadata, mirrored from the PSP by the sync module.
+  /// NOT payment logic — the engine never bills; these fields exist solely so the
+  /// admin/customer can see what a license is/costs. Source of truth stays at the PSP.
+  planName        String?
+  priceDisplay    String? /// e.g. "29 €/Monat" or "199 € einmalig"
+  billingInterval String? /// e.g. "monthly" | "yearly" | "once" — free-form display
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
