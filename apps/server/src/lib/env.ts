@@ -33,6 +33,14 @@ const envSchema = z
     /** Force a specific mail transport. Default = auto (smtp if configured, else console). */
     MAIL_TRANSPORT: z.enum(['console', 'smtp']).optional(),
     /**
+     * Audit-log retention windows (days) for the `audit:prune` cron. Routine
+     * bookkeeping is removed sooner; security-/forensics-relevant events
+     * (logins, rejected activations, revocations, key/credential lifecycle —
+     * see CRITICAL_EVENTS) are kept longer.
+     */
+    AUDIT_RETENTION_ROUTINE_DAYS: z.coerce.number().int().min(1).max(36500).default(90),
+    AUDIT_RETENTION_CRITICAL_DAYS: z.coerce.number().int().min(1).max(36500).default(365),
+    /**
      * Opt-in: trust X-Forwarded-For / X-Real-IP headers for `extractIp`. Set
      * to `true` in production behind a reverse proxy (NPM), where the app
      * container has no direct public port-mapping and the proxy is the only

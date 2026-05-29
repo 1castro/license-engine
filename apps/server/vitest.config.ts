@@ -7,7 +7,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['tests/**/*.{test,spec}.{ts,tsx}'],
+    // Unit suite only — integration tests (tests/integration/**) need a real DB
+    // and run via `pnpm test:integration` with their own config.
+    include: ['tests/lib/**/*.{test,spec}.{ts,tsx}'],
     globals: false,
     coverage: {
       provider: 'v8',
