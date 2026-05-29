@@ -4,10 +4,12 @@ import { Link } from '@/i18n/navigation';
 import { prisma } from '@/lib/prisma';
 import { getSeatUsage, listActivationsForLicense } from '@/lib/binding/activation-service';
 import { parseBindingPolicy } from '@/lib/binding/binding-policy';
+import { getRejectedForLicense } from '@/lib/services/dashboard-service';
 import {
   ActivationsView,
   type ActivationItem,
 } from '../../_components/activations-view';
+import { RejectedAttemptsView } from '../../_components/rejected-attempts-view';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,9 +29,10 @@ export default async function LicenseActivationsPage({
   });
   if (!license) notFound();
 
-  const [activations, seats] = await Promise.all([
+  const [activations, seats, rejected] = await Promise.all([
     listActivationsForLicense(id),
     getSeatUsage(id, parseBindingPolicy(license.bindingPolicy)),
+    getRejectedForLicense(id),
   ]);
 
   const items: ActivationItem[] = activations.map((a) => {
@@ -62,6 +65,8 @@ export default async function LicenseActivationsPage({
       </div>
 
       <ActivationsView licenseId={id} activations={items} seats={seats} />
+
+      <RejectedAttemptsView entries={rejected} />
     </div>
   );
 }

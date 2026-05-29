@@ -33,6 +33,54 @@ function jsonError(status: number, code: string, message: string, details?: unkn
   return NextResponse.json({ error: { code, message, details } }, { status });
 }
 
+type RejectReason =
+  | 'key_ungültig'
+  | 'lizenz_unbekannt'
+  | 'lizenz_inaktiv'
+  | 'lizenz_abgelaufen'
+  | 'limit_erreicht'
+  | 'pflichtbindung_fehlt';
+
+/**
+ * Records a refused activation attempt as an audit event so it surfaces in the
+ * admin dashboard / per-license view and as a plain count in the customer
+ * portal. Only genuine licensing rejections are recorded — transport noise
+ * (rate-limit, malformed JSON, oversized body) is intentionally skipped.
+ * writeAuditLog is fire-and-forget (never throws), so awaiting it is safe.
+ */
+async function auditActivationRejected(
+  reason: RejectReason,
+  opts: {
+    licenseId?: string | null;
+    bindingType?: string | null;
+    attemptedBindings?: Array<{ type: string; value: string; metadata?: Record<string, unknown> }>;
+    productSlug?: string;
+  },
+  ip: string | null,
+): Promise<void> {
+  // Truncate attempted values — forensic context, not the hashed seat anchor.
+  const attempted = (opts.attemptedBindings ?? []).map((b) => ({
+    type: b.type,
+    value: b.value.slice(0, 64),
+    displayName:
+      typeof b.metadata?.displayName === 'string' ? b.metadata.displayName.slice(0, 80) : undefined,
+  }));
+  await writeAuditLog({
+    eventType: AuditEventType.ActivationRejected,
+    actorType: 'anonymous',
+    actorId: null,
+    targetType: 'License',
+    targetId: opts.licenseId ?? null,
+    metadata: {
+      reason,
+      bindingType: opts.bindingType ?? null,
+      productSlug: opts.productSlug,
+      attemptedBindings: attempted.length > 0 ? attempted : undefined,
+    },
+    ip,
+  });
+}
+
 export async function POST(req: Request) {
   const log = getLogger();
   try {
@@ -73,6 +121,7 @@ async function handleActivate(
 
   const canonicalKey = normalizeLicenseKey(parsed.data.licenseKey);
   if (!canonicalKey) {
+    await auditActivationRejected('key_ungültig', { productSlug: parsed.data.productSlug }, ip);
     return jsonError(400, 'invalid_license_key', 'License key format / checksum invalid');
   }
 
@@ -90,10 +139,18 @@ async function handleActivate(
   // Uniform "license not active" response — do not leak whether the key exists.
   if (!license || !license.product || license.product.slug !== parsed.data.productSlug) {
     log.warn({ event: 'activate.unknown_or_wrong_product' }, 'Activate rejected');
+    // If the key resolves to a real license but for the wrong product, attach
+    // its id so the attempt is traceable to that license; otherwise log anonymously.
+    await auditActivationRejected(
+      'lizenz_unbekannt',
+      { licenseId: license?.id ?? null, productSlug: parsed.data.productSlug },
+      ip,
+    );
     return jsonError(404, 'license_not_active', 'License not found, expired or does not belong to this product');
   }
 
   if (license.status !== LicenseStatus.active) {
+    await auditActivationRejected('lizenz_inaktiv', { licenseId: license.id }, ip);
     return jsonError(403, 'license_not_active', 'License is not active');
   }
   if (license.expiresAt && license.expiresAt.getTime() <= Date.now()) {
@@ -113,6 +170,7 @@ async function handleActivate(
         ip,
       });
     }
+    await auditActivationRejected('lizenz_abgelaufen', { licenseId: license.id }, ip);
     return jsonError(403, 'license_not_active', 'License has expired');
   }
 
@@ -122,12 +180,22 @@ async function handleActivate(
   } catch (err) {
     if (err instanceof BindingPolicyViolationError) {
       const status = err.reason === 'missing_required' ? 400 : 409;
+      await auditActivationRejected(
+        err.reason === 'missing_required' ? 'pflichtbindung_fehlt' : 'limit_erreicht',
+        {
+          licenseId: license.id,
+          bindingType: err.bindingType,
+          attemptedBindings: parsed.data.bindings,
+        },
+        ip,
+      );
       return jsonError(status, `binding_${err.reason}`, err.message, { bindingType: err.bindingType });
     }
     if (err instanceof LicenseStateChangedError) {
       // Lost the race: license was revoked/expired between our initial read
       // and the FOR-UPDATE lock. Surface as license_not_active so the client
       // re-evaluates from scratch.
+      await auditActivationRejected('lizenz_inaktiv', { licenseId: license.id }, ip);
       return jsonError(403, 'license_not_active', `License became ${err.newStatus} during activation`);
     }
     throw err;

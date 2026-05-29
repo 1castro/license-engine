@@ -26,7 +26,19 @@
   "dashboard": {
     "title": "Übersicht",
     "welcome": "Willkommen, {name}.",
-    "placeholder": "Die Verwaltung folgt in Phase 2."
+    "placeholder": "Die Verwaltung folgt in Phase 2.",
+    "metricActiveLicenses": "Aktive Lizenzen",
+    "metricCustomers": "Kunden",
+    "metricProducts": "Produkte",
+    "metricRejected": "Abgewiesene Versuche",
+    "activeLicensesTitle": "Aktive Lizenzen",
+    "colCustomer": "Kunde",
+    "colProduct": "Produkt",
+    "colSeats": "Plätze",
+    "colRejected": "Abgewiesen",
+    "noLicenses": "Noch keine aktiven Lizenzen.",
+    "bannerRejects": "{count} abgewiesene Aktivierungsversuche (letzte 7 Tage) — ansehen",
+    "bannerClose": "Hinweis schließen"
   },
   "common": {
     "loading": "Wird geladen…",
@@ -197,7 +209,20 @@
     "noResults": "Keine Treffer.",
     "prev": "Zurück",
     "next": "Weiter",
-    "pageOf": "Seite {page} von {total}"
+    "pageOf": "Seite {page} von {total}",
+    "rejectsTitle": "Abgewiesene Versuche",
+    "rejectsEmpty": "Keine abgewiesenen Versuche.",
+    "rejectsColTime": "Zeitpunkt",
+    "rejectsColReason": "Grund",
+    "rejectsColAttempted": "Versuch",
+    "rejectsColIp": "IP (Hash)",
+    "reasonKeyInvalid": "Ungültiger Schlüssel",
+    "reasonUnknownLicense": "Unbekannte Lizenz / falsches Produkt",
+    "reasonInactive": "Lizenz inaktiv",
+    "reasonExpired": "Lizenz abgelaufen",
+    "reasonLimit": "Platz-Limit erreicht",
+    "reasonForeignDomain": "Nicht autorisierte Domain",
+    "reasonMissingBinding": "Pflicht-Bindung fehlt"
   },
   "auditLog": {
     "title": "Audit-Log",

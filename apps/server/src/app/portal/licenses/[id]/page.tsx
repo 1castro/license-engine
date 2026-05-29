@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getPortalSession } from '@/lib/portal/session';
 import { getSeatUsage } from '@/lib/binding/activation-service';
 import { parseBindingPolicy } from '@/lib/binding/binding-policy';
+import { countRejectedForLicense } from '@/lib/services/dashboard-service';
 import {
   PortalActivationsView,
   type PortalActivationItem,
@@ -43,6 +44,7 @@ export default async function PortalLicenseDetailPage({
     : [];
 
   const seats = await getSeatUsage(id, parseBindingPolicy(license.bindingPolicy));
+  const rejectedCount = await countRejectedForLicense(id);
   const items: PortalActivationItem[] = license.activations.map((a) => {
     const meta = a.bindingValueMetadata as Record<string, unknown> | null;
     return {
@@ -118,6 +120,15 @@ export default async function PortalLicenseDetailPage({
           Behandeln Sie diese Lizenznummer wie ein Passwort: Wer sie kennt, kann die Lizenz
           aktivieren. Geben Sie sie nicht an Unbefugte weiter.
         </p>
+
+        {rejectedCount > 0 && (
+          <p className="mt-2 rounded border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-800">
+            Hinweis: Es gab {rejectedCount} abgewiesene{' '}
+            {rejectedCount === 1 ? 'Anmeldung' : 'Anmeldungen'} an dieser Lizenz (z.&nbsp;B. weil das
+            Platz-Limit erreicht war oder die Zugangsdaten nicht passten). Wenn Ihnen das ungewöhnlich
+            vorkommt, melden Sie sich bei uns.
+          </p>
+        )}
       </div>
 
       <div className="space-y-3">

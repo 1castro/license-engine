@@ -26,7 +26,19 @@
   "dashboard": {
     "title": "Overview",
     "welcome": "Welcome, {name}.",
-    "placeholder": "Management will arrive in Phase 2."
+    "placeholder": "Management will arrive in Phase 2.",
+    "metricActiveLicenses": "Active licenses",
+    "metricCustomers": "Customers",
+    "metricProducts": "Products",
+    "metricRejected": "Rejected attempts",
+    "activeLicensesTitle": "Active licenses",
+    "colCustomer": "Customer",
+    "colProduct": "Product",
+    "colSeats": "Seats",
+    "colRejected": "Rejected",
+    "noLicenses": "No active licenses yet.",
+    "bannerRejects": "{count} rejected activation attempts (last 7 days) — view",
+    "bannerClose": "Dismiss"
   },
   "common": {
     "loading": "Loading…",
@@ -197,7 +209,20 @@
     "noResults": "No matches.",
     "prev": "Previous",
     "next": "Next",
-    "pageOf": "Page {page} of {total}"
+    "pageOf": "Page {page} of {total}",
+    "rejectsTitle": "Rejected attempts",
+    "rejectsEmpty": "No rejected attempts.",
+    "rejectsColTime": "Time",
+    "rejectsColReason": "Reason",
+    "rejectsColAttempted": "Attempt",
+    "rejectsColIp": "IP (hash)",
+    "reasonKeyInvalid": "Invalid key",
+    "reasonUnknownLicense": "Unknown license / wrong product",
+    "reasonInactive": "License inactive",
+    "reasonExpired": "License expired",
+    "reasonLimit": "Seat limit reached",
+    "reasonForeignDomain": "Unauthorized domain",
+    "reasonMissingBinding": "Required binding missing"
   },
   "auditLog": {
     "title": "Audit log",

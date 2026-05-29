@@ -30,6 +30,10 @@ export const AuditEventType = {
   // Activation lifecycle
   ActivationCreated: 'activation.created',
   ActivationReleased: 'activation.released',
+  /** A binding/activation attempt was refused (limit, missing required binding,
+   *  foreign domain, unknown/inactive/expired license, invalid key). Surfaced to
+   *  the admin (per-license + dashboard) and, as a plain count, to the customer. */
+  ActivationRejected: 'activation.rejected',
 
   // API-Key lifecycle
   ApiKeyCreated: 'apikey.created',
