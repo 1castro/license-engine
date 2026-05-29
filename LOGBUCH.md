@@ -13,6 +13,8 @@ Den im Voll-Audit bewusst zurückgestellten Punkt nachgeholt (auf Jans Wunsch �
 - Divergenz bereinigt: `LicenseTokenBinding.type` war serverseitig `string`, jetzt einheitlich `BindingType`.
 - Reiner Typ-Refactor, kein Laufzeitverhalten. typecheck/lint/132+18 Tests/Build grün. Docker-Build baut shared-types bereits vor dem Server (kein Pipeline-Eingriff nötig). Commit `6b5f584`. Noch nicht deployt (kein Verhaltensänderung — geht beim nächsten funktionalen Deploy mit).
 
+**Pre-Deploy-Audit (Workflow, Scope `6b5f584`):** Drei Dimensionen (Code/Logik/Security) parallel + adversariale Verifikation jedes Findings (9 Agenten). 6 Rohfindings → 4 als Fehlalarm verworfen, 2 bestätigt, **beide nur nit**: (1) `sdk-js`-Lint ist ein Stub (Vorzustand, off-scope, durch typecheck abgedeckt); (2) `LicenseTokenClaims`-Intersection empirisch als semantisch identisch zur alten `extends JWTPayload`-Variante bestätigt (kein Wire-/Verhaltens-Unterschied). **Status: grün** — keine Blocker/Major/Minor. Wiederverwendbarer Workflow `pre-deploy-audit` (Skript persistiert).
+
 ---
 
 ## 2026-05-28 — Portal-Self-Service-Feinschliff + Voll-Audit & Härtung (v1.2.0)
