@@ -7,6 +7,37 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [1.3.0] - 2026-05-29 — Fehlversuch-Protokoll, Integrationstests, Log-Retention
+
+Härtungs-Block vor der ersten echten App-Integration. Jeder Teil mit Pre-Deploy-Audit
+(3-Agenten-Workflow + adversariale Verifikation) und Fix-Runde.
+
+### Hinzugefügt
+- **Fehlversuch-Protokoll**: Abgewiesene Aktivierungen werden als Audit-Event
+  `activation.rejected` an allen fachlichen Ablehnungspfaden erfasst (ungültiger Key,
+  unbekannte/inaktive/abgelaufene Lizenz, Platz-Limit, fehlende Pflichtbindung) und
+  sichtbar gemacht: **License-Manager-Dashboard** (vorher leer → Kennzahlen + aktive
+  Lizenzen mit Plätzen + Fehlversuch-Zähler + wegklickbares Warn-Banner),
+  **Lizenz-Detailseite** (Detail-Tabelle mit Klartext-Gründen), **Kundenportal**
+  (schlichter Hinweis, nur Anzahl).
+- **Integrationstest-Infrastruktur**: echte API-Route-Handler gegen echtes Postgres
+  (`pnpm test:integration`, Wegwerf-DB via `docker-compose.test.yml`). 16 Tests sichern
+  Seat-Limit, Quota-beim-Reaktivieren, Reject-Audit, revoked/expired-Lizenz,
+  Multi-Tenant-Isolation und die Privilege-Escalation-Sperre ab.
+- **Audit-Log-Retention**: differenziertes Pruning (`pnpm audit:prune`, per Cron) —
+  Sicherheits-/Forensik-Events 365 Tage, Routine 90 Tage (ENV `AUDIT_RETENTION_*`).
+  Harte Invariante `critical >= routine` (fail-fast), fail-safe Allowlist (unbekannte
+  Events werden nie gelöscht).
+- **shared-types**: Over-the-wire-Typen einmalig in `@license-engine/shared-types`,
+  von Server + SDK genutzt; activate/recheck-Antworten per `satisfies` gegen den Vertrag geprüft.
+
+### Geändert
+- „Zuletzt aktiv" wird auch beim `recheck` aktualisiert.
+- Dokumentation konsolidiert: schlanke Struktur (Briefing + Changelog im Root, alles
+  Weitere in `docs/`: PROJEKT, LOGBUCH, INTEGRATION, BETRIEB).
+
+---
+
 ## [1.2.0] - 2026-05-28 — Portal-Self-Service & Seat-Verwaltbarkeit
 
 Aufbauend auf dem Seat-Management (1.1.0): die Verwaltung wird **laientauglich**
