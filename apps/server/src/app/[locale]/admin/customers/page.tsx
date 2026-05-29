@@ -115,6 +115,6 @@ function sourceLabel(t: CustomersT, source: 'manual' | 'stripe' | 'paddle' | 'po
     case 'paddle':
       return t('sourcePaddle');
     case 'polar':
-      return 'Polar';
+      return t('sourcePolar');
   }
 }

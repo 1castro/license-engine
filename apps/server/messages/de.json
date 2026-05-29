@@ -117,7 +117,8 @@
     "editTitle": "Kunden bearbeiten",
     "delete": "Kunden löschen",
     "deleteConfirm": "Kunde „{name}\" wirklich löschen?",
-    "deleteHasLicenses": "Dieser Kunde kann nicht gelöscht werden — er hat noch {count} Lizenz(en)."
+    "deleteHasLicenses": "Dieser Kunde kann nicht gelöscht werden — er hat noch {count} Lizenz(en).",
+    "sourcePolar": "Polar"
   },
   "licenses": {
     "title": "Lizenzen",

@@ -189,7 +189,7 @@ export function CustomerForm(props: CreateProps | EditProps) {
                     <SelectItem value="manual">{t('sourceManual')}</SelectItem>
                     <SelectItem value="stripe">{t('sourceStripe')}</SelectItem>
                     <SelectItem value="paddle">{t('sourcePaddle')}</SelectItem>
-                    <SelectItem value="polar">Polar</SelectItem>
+                    <SelectItem value="polar">{t('sourcePolar')}</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />

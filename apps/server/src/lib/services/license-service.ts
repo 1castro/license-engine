@@ -27,7 +27,8 @@ const expiresAtSchema = z
 const featureFlagsSchema = z.array(z.string().min(1).max(64));
 
 // Display-only billing metadata (mirrored from the PSP) — never payment logic.
-// nullable: an update may pass null to clear a field; undefined leaves it untouched.
+// nullable: an update may pass null to CLEAR a field; undefined leaves it untouched.
+// min(1): an empty string is rejected (400) — clearing is done via null, not "".
 const billingDisplaySchema = {
   planName: z.string().min(1).max(120).nullable().optional(),
   priceDisplay: z.string().min(1).max(120).nullable().optional(),

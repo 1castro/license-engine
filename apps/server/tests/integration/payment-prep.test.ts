@@ -57,6 +57,20 @@ describe('Payment-Vorbereitung — externalRef-Lookup + Display-Metadaten', () =
     expect(second.license.id).toBe(first.license.id);
   });
 
+  it('idempotent re-create does NOT overwrite display fields (sync-module invariant)', async () => {
+    const input = await baseInput();
+    const first = await createLicense({ ...input, externalRef: 'sub_inv', planName: 'Pro' }, testCtx);
+    expect(first.license.planName).toBe('Pro');
+    // Re-create with the same (source, ref) but a CHANGED planName → must be a
+    // no-op (returns existing, keeps 'Pro'); updates go through PATCH, not create.
+    const again = await createLicense(
+      { ...input, externalRef: 'sub_inv', planName: 'Enterprise' },
+      testCtx,
+    );
+    expect(again.created).toBe(false);
+    expect(again.license.planName).toBe('Pro');
+  });
+
   it('renews via update (expiresAt) and clears a display field with null', async () => {
     const { license } = await createLicense(
       { ...(await baseInput()), externalRef: 'sub_renew', planName: 'Pro' },

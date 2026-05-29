@@ -117,7 +117,8 @@
     "editTitle": "Edit customer",
     "delete": "Delete customer",
     "deleteConfirm": "Really delete customer \"{name}\"?",
-    "deleteHasLicenses": "Cannot delete: this customer still has {count} license(s)."
+    "deleteHasLicenses": "Cannot delete: this customer still has {count} license(s).",
+    "sourcePolar": "Polar"
   },
   "licenses": {
     "title": "Licenses",
