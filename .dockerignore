@@ -12,10 +12,8 @@
 *.log
 .DS_Store
 README.md
-LOGBUCH.md
-PROJEKTSTATUS.md
-PHASEN.md
 CLAUDE.md
+docs
 # CHANGELOG.md NICHT ausschließen — die Admin-UI liest es zur Laufzeit (Modal).
 .vscode
 .idea

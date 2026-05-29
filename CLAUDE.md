@@ -145,12 +145,14 @@ Eine `BindingPolicy` pro Lizenz definiert: welche Bindungstypen sind Pflicht, wi
 - React-Bindings als optionales Sub-Paket
 
 ## Dokumentations-Pflicht
+Bewusst schlank gehalten — Briefing + Changelog im Root, alles Weitere in `docs/`.
 Folgende Dateien werden kontinuierlich aktuell gehalten:
-- `CLAUDE.md` — dieses Briefing + Konventionen, wird im Verlauf verfeinert
-- `LOGBUCH.md` — chronologisches Arbeitsprotokoll, ein Eintrag pro Sitzung
-- `PROJEKTSTATUS.md` — aktueller Stand, was läuft, was hängt, nächste Schritte
-- `CHANGELOG.md` — versionierte Änderungen (Keep a Changelog)
-- `PHASEN.md` — detaillierte Phasen- und Task-Planung
+- `CLAUDE.md` (Root) — dieses Briefing + Konventionen, wird im Verlauf verfeinert
+- `CHANGELOG.md` (Root) — versionierte Änderungen (Keep a Changelog)
+- `docs/PROJEKT.md` — Vision, aktueller Stand, Architektur-Überblick, Roadmap (ersetzt die früheren PROJEKTSTATUS + PHASEN)
+- `docs/LOGBUCH.md` — chronologisches Arbeitsprotokoll, ein Eintrag pro Sitzung
+- `docs/INTEGRATION.md` — wie eine App sich gegen die Engine lizenziert
+- `docs/BETRIEB.md` — Backup/Restore, Mail, Cron-Jobs, Pre-Deploy-Audit-Workflow
 
 ## Coding-Prinzipien
 - Gründliche Impact-Analyse vor nicht-trivialen Änderungen. Keine Quick-Fixes ohne Folgekosten-Abschätzung.
@@ -163,7 +165,7 @@ Folgende Dateien werden kontinuierlich aktuell gehalten:
 
 ## Sprach-Konventionen
 - Code, Variablen, Klassen, Datei-Namen: Englisch
-- Projekt-Dokumentation (CLAUDE.md, LOGBUCH.md, PROJEKTSTATUS.md, CHANGELOG.md, PHASEN.md): Deutsch
+- Projekt-Dokumentation (CLAUDE.md, CHANGELOG.md, docs/PROJEKT.md, docs/LOGBUCH.md, docs/INTEGRATION.md, docs/BETRIEB.md): Deutsch
 - Admin-UI: Deutsch (i18n-fähig vorbereitet, Englisch als Fallback-Locale)
 - Commit-Messages: Englisch, Conventional Commits
 

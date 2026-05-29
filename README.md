@@ -2,14 +2,15 @@
 
 Zentraler, selbst gehosteter Multi-Product-Lizenz-Server für die tropicsoft-Produktlandschaft. Stellt signierte JWTs aus und wird über SDK + REST-API in eigene Projekte integriert.
 
-## Wichtige Dokumente
+## Dokumentation
 
-- [CLAUDE.md](./CLAUDE.md) — vollständiges Projektbriefing, Architektur-Entscheidungen, Konventionen, Audit-Workflow
-- [PHASEN.md](./PHASEN.md) — Phasen- und Task-Planung, aktueller Implementierungs-Stand
-- [PROJEKTSTATUS.md](./PROJEKTSTATUS.md) — aktueller Stand, offene Punkte, nächste Schritte
-- [LOGBUCH.md](./LOGBUCH.md) — chronologisches Arbeitsprotokoll
+- [CLAUDE.md](./CLAUDE.md) — verbindliches Projektbriefing: Architektur-Entscheidungen, Konventionen, Audit-Workflow
 - [CHANGELOG.md](./CHANGELOG.md) — versionierte Änderungen (Keep a Changelog)
+- [docs/PROJEKT.md](./docs/PROJEKT.md) — Vision, aktueller Stand, Architektur-Überblick, Roadmap
+- [docs/LOGBUCH.md](./docs/LOGBUCH.md) — chronologisches Arbeitsprotokoll
+- [docs/INTEGRATION.md](./docs/INTEGRATION.md) — wie eine App sich gegen die Engine lizenziert
+- [docs/BETRIEB.md](./docs/BETRIEB.md) — Backup/Restore, Mail, Cron-Jobs, Pre-Deploy-Audit-Workflow
 
 ## Status
 
-Initialisiert. Wartet auf „Go für Phase 1". Details siehe [PROJEKTSTATUS.md](./PROJEKTSTATUS.md).
+**LIVE in Produktion (v1.2.0)** — https://license.tropicsoft.de. Details: [docs/PROJEKT.md](./docs/PROJEKT.md).

@@ -16,8 +16,8 @@
  * A successful login (registered via `recordSuccess`) resets the counter.
  *
  * Like the rate-limiter, this state lives per-process — fine for single-
- * instance deploy, lifts to Redis when we go multi-instance (see PHASEN.md
- * Phase-5-Backlog).
+ * instance deploy, lifts to Redis when we go multi-instance (see docs/PROJEKT.md
+ * Roadmap).
  */
 
 interface BackoffState {
