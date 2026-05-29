@@ -82,8 +82,7 @@ Detail-Verifikation je Phase steht im git-Verlauf + [LOGBUCH.md](./LOGBUCH.md).
 ## Roadmap / Backlog (priorisiert)
 
 1. **Erste reale Integration: Fahrdienst** — Seat-Lizenzierung der PHP-App gegen die Engine.
-2. **Server-Cron** für `licenses:expire` + `audit:prune` einrichten.
-3. **Rate-Limiter auf Redis** — erst bei Multi-Instance-Deploy nötig (aktuell single-instance).
+2. **Rate-Limiter auf Redis** — erst bei Multi-Instance-Deploy nötig (aktuell single-instance).
 4. **React-Bindings fürs SDK** — wenn die erste React-App das SDK clientseitig nutzt.
 5. **KEK-Rotation-Skript** — bei konkretem Anlass (siehe BETRIEB.md).
 6. **GitHub Actions CI** — mit der jetzt vorhandenen Integrationstest-DB sinnvoll nachrüstbar.

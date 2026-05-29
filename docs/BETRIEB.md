@@ -15,6 +15,13 @@ im Stack-Verzeichnis aus). Ohne Cron passiert nichts automatisch.
 | `pnpm licenses:expire` | Abgelaufene Lizenzen auf `expired` flippen (+ Audit) | täglich |
 | `pnpm audit:prune` | Audit-Log nach Retention-Fristen aufräumen | täglich |
 
+**Eingerichtet (Produktion, 2026-05-29):** Host-Cron auf `188.245.95.60` ruft täglich
+03:30 UTC `/opt/stacks/license-engine/cron-maintenance.sh` auf. Das Skript führt beide
+Jobs über den `license-engine-migrate`-Service aus (`docker compose run --rm … pnpm …`,
+builder-Image — das schlanke runtime-Image hat kein pnpm/tsx/scripts) und loggt nach
+`/var/log/license-engine-maintenance.log`. Crontab-Zeile:
+`30 3 * * * /opt/stacks/license-engine/cron-maintenance.sh`.
+
 Retention-Fristen (ENV, in `.env`): `AUDIT_RETENTION_ROUTINE_DAYS` (Default 90),
 `AUDIT_RETENTION_CRITICAL_DAYS` (Default 365). Sicherheits-/Forensik-Events (Logins,
 abgewiesene Aktivierungen, Token-Fehler, Widerruf/Ablauf, Key-/Passwort-Lifecycle)
