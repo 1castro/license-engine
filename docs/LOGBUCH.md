@@ -4,6 +4,18 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-05-29 — Payment-Vorbereitung (PSP-agnostisch, v1.4.0)
+
+PSP-Anbindung als Engine-Basis vorbereitet, BEVOR das erste Produkt lizenziert wird. Ein Recherche-Sub-Chat lieferte eine PSP-Empfehlung (Merchant of Record; Polar/Paddle gleichauf, Endwahl offen — der „Early Member"-Preisvorteil von Polar war zum 27.05. ausgelaufen). Als License-Engine-Architekt die Sub-Chat-Liste gefiltert: das meiste war Sync-Modul/Account-Setup, die echte Engine-Vorarbeit ist klein + PSP-agnostisch. Umgesetzt (Commit `451afb9` + Audit-Fixes):
+
+- **(A)** `ExternalSource += polar` (Customer + License), durchgängig in Admin-/Kunden-Form + Listen-Labels (i18n `sourcePolar`).
+- **(B)** Display-only Abrechnungs-Metadaten an der Lizenz (`planName`/`priceDisplay`/`billingInterval`, nullable). **Keine Payment-Logik** — reine Anzeige, vom PSP/Sync-Modul gespiegelt; Eingabe im Lizenz-Formular (Create+Edit über generische `BillingDisplayFields`), Anzeige in Admin-Lizenzansicht + Kundenportal.
+- **(C)** `externalRef`/`externalSource`-Filter in `listLicenses` + `GET /licenses` → Sync-Modul findet Lizenz über (Quelle, Ref) und verlängert idempotent per PATCH (Erzeugen/Widerrufen konnte die API schon).
+
+CLAUDE.md-Payment-Abgrenzung aufgeweicht (Logik raus, Anzeige-Metadaten rein). 2 additive Migrationen (enum-Wert + 3 nullable Spalten). **Pre-Deploy-Audit:** 0 Blocker/Major, 1 minor + 3 nit — alle gefixt (sourcePolar-i18n, Idempotenz-Invarianten-Negativtest, Schema-Kommentar). typecheck/lint/**132+18 Unit + 21 Integration**/Build grün. **Deployt v1.4.0**, beide Migrationen in Prod, Smoke-Test grün. **Sync-Modul (Webhooks/Checkout/Token-Kopplung) bleibt das separate Stück für „PSP-Tag".**
+
+---
+
 ## 2026-05-29 — Fehlversuch-Protokoll + Integrationstest-Infra + Audit-Retention + Deploy v1.3.0
 
 Großer Härtungs-Block (alles License-Engine, vor erster echter App-Integration). Drei Themen, jedes mit Pre-Deploy-Audit (Workflow, 3 Dim + adversariale Verifikation) + Fix-Runde + Re-Check.

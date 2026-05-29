@@ -15,9 +15,15 @@ an einer Stelle bündeln. Payment/Billing ist bewusst **kein** Teil (siehe CLAUD
 
 ## Aktueller Stand
 
-**LIVE in Produktion (v1.3.0)** auf `188.245.95.60`, erreichbar unter
+**LIVE in Produktion (v1.4.0)** auf `188.245.95.60`, erreichbar unter
 **https://license.tropicsoft.de**. Phasen 1–7 + Voll-Audit-Härtung + Fehlversuch-Protokoll,
-Integrationstests, Audit-Log-Retention und shared-types-Zentralisierung — alles live.
+Integrationstests, Audit-Log-Retention, shared-types-Zentralisierung und PSP-agnostische
+Payment-Vorbereitung — alles live.
+
+**Payment-Status:** Vorbereitung steht (Display-Metadaten an der Lizenz, `polar`-Quelle,
+externalRef-Lookup für idempotente Verlängerung). **Keine Payment-Logik** — die kommt
+später als separates Sync-Modul. PSP-Wahl offen (PSP-Eval empfahl Merchant-of-Record;
+Polar und Paddle gleichauf, Endwahl bei Jan).
 
 **Nächster Schritt:** Erste reale App-Integration — der Fahrdienst (PHP) gegen die
 Seat-API. Konzept + API-Vertrag: [INTEGRATION.md](./INTEGRATION.md) (universelles Modell,

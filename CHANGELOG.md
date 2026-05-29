@@ -7,6 +7,29 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [1.4.0] - 2026-05-29 — Payment-Vorbereitung (PSP-agnostisch)
+
+Engine-Basis für die spätere Anbindung eines Zahlungsdienstleisters (Merchant of
+Record), ohne die PSP-Wahl festzulegen (Polar/Paddle beide bedienbar). **Keine
+Payment-Logik** — Abrechnung/Steuer bleiben beim PSP.
+
+### Hinzugefügt
+- **Display-Abrechnungs-Metadaten** an der Lizenz (`planName`, `priceDisplay`,
+  `billingInterval`): reine Anzeige, vom PSP/Sync-Modul gespiegelt. Eingebbar im
+  Lizenz-Formular, sichtbar in der Admin-Lizenzansicht und im Kundenportal
+  („Plan" / „Preis").
+- **`polar`** als neue Zahlungsquelle (`ExternalSource`), durchgängig in Admin-
+  und Kunden-Formular + Listen-Labels.
+- **Lizenz-Lookup per `externalRef`/`externalSource`** (`GET /api/admin/v1/licenses`
+  + Service-Filter): ein künftiges Webhook-Sync-Modul findet eine Lizenz über
+  `(Quelle, Referenz)` und verlängert sie idempotent per PATCH.
+
+### Geändert
+- CLAUDE.md-Payment-Abgrenzung aufgeweicht: Payment-**Logik** bleibt draußen,
+  gespiegelte **Anzeige-Metadaten** sind erlaubt.
+
+---
+
 ## [1.3.0] - 2026-05-29 — Fehlversuch-Protokoll, Integrationstests, Log-Retention
 
 Härtungs-Block vor der ersten echten App-Integration. Jeder Teil mit Pre-Deploy-Audit
