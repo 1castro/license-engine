@@ -15,17 +15,9 @@ an einer Stelle bündeln. Payment/Billing ist bewusst **kein** Teil (siehe CLAUD
 
 ## Aktueller Stand
 
-**LIVE in Produktion (v1.2.0)** auf `188.245.95.60`, erreichbar unter
-**https://license.tropicsoft.de**. Phasen 1–7 abgeschlossen + Voll-Audit-Härtung.
-
-**Committet, noch nicht deployt** (nächster Deploy bündelt diese):
-- **Fehlversuch-Protokoll** — abgewiesene Aktivierungen (`activation.rejected`) werden
-  erfasst und sichtbar gemacht (Admin-Dashboard mit Banner, Lizenz-Detail, Portal-Hinweis).
-- **Integrationstest-Infrastruktur** — echte Route-Handler gegen echtes Postgres
-  (`pnpm test:integration`, 16 Tests), sichert die sicherheitskritischen Pfade ab.
-- **Audit-Log-Retention** — differenziertes Pruning (`pnpm audit:prune`), Forensik-Events
-  365 Tage / Routine 90 Tage (per ENV).
-- **shared-types-Zentralisierung** — Wire-Typen einmalig in `@license-engine/shared-types`.
+**LIVE in Produktion (v1.3.0)** auf `188.245.95.60`, erreichbar unter
+**https://license.tropicsoft.de**. Phasen 1–7 + Voll-Audit-Härtung + Fehlversuch-Protokoll,
+Integrationstests, Audit-Log-Retention und shared-types-Zentralisierung — alles live.
 
 **Nächster Schritt:** Erste reale App-Integration — der Fahrdienst (PHP) gegen die
 Seat-API. Konzept + API-Vertrag: [INTEGRATION.md](./INTEGRATION.md) (universelles Modell,
@@ -83,7 +75,7 @@ Detail-Verifikation je Phase steht im git-Verlauf + [LOGBUCH.md](./LOGBUCH.md).
 | 7 | Pre-Deploy-Härtung + Production-Deploy (v1.0) | done |
 | A | Seat-Management für App-Lizenzierung | done |
 | — | v1.2.0 Voll-Audit-Härtung (Multi-Tenant, Quota, Portal-Session) | done |
-| — | Fehlversuch-Protokoll + Integrationstests + Log-Retention | committet, Deploy offen |
+| — | Fehlversuch-Protokoll + Integrationstests + Log-Retention (v1.3.0) | done, live |
 
 ---
 

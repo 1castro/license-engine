@@ -4,9 +4,11 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
-## 2026-05-29 — Fehlversuch-Protokoll + Integrationstest-Infra + Audit-Retention
+## 2026-05-29 — Fehlversuch-Protokoll + Integrationstest-Infra + Audit-Retention + Deploy v1.3.0
 
 Großer Härtungs-Block (alles License-Engine, vor erster echter App-Integration). Drei Themen, jedes mit Pre-Deploy-Audit (Workflow, 3 Dim + adversariale Verifikation) + Fix-Runde + Re-Check.
+
+**Deploy v1.3.0 (gebündelt):** shared-types + Fehlversuch-Protokoll + Test-Infra + Retention live auf license.tropicsoft.de. Erster Build scheiterte (shared-types-`dist` fehlte — stale `tsconfig.tsbuildinfo` übersprang den tsc-Emit, erste Build-Konstellation seit der Zentralisierung); Fix: clean vor Emit im build-Script + `.dockerignore`-Hygiene. Zweiter Deploy grün, Container healthy, externer Smoke-Test (portal/admin/login 200, public-keys 200, health extern 404, admin-API 401) bestanden. **Doku konsolidiert** (10 → 3 Root + 4 docs/). **Offen (Ops): Server-Cron** für `audit:prune` + `licenses:expire` noch einzurichten.
 
 **1. Fehlversuch-Protokoll** (Commits `0a07b3d` + Audit-Fixes `16813d7`): Abgewiesene Aktivierungen (`activation.rejected`) werden jetzt an allen fachlichen Ablehnungspfaden von activate erfasst (ungültiger Key, unbekannte/inaktive/abgelaufene Lizenz, Limit, Pflichtbindung) — Transport-Rauschen bewusst nicht. Sichtbar: Dashboard (war leer → Kennzahlen + aktive-Lizenzen-Liste + wegklickbares Banner), Lizenz-Detailseite (Detail-Tabelle), Kundenportal (schlichter Hinweis, nur Anzahl). Audit-Fund (major): Label "Nicht autorisierte Domain" war fachlich falsch (keine Allowlist, nur Limit) → "Domain-Limit erreicht".
 
