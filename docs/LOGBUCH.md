@@ -21,8 +21,10 @@ Map-Obergrenze) waren ohnehin unabhängig wirksam. **Fokussierter Security-Audit
 grün** — keine zweite ungeschützte XFF-Konsumstelle im Code (alle 17 IP-Quellen gehen über
 `extractIp`), legitime Fälle intakt, `TRUST_PROXY_HEADERS=false`→null korrekt. +3 Unit-Tests
 (X-Real-IP-Priorität, XFF-last, Anti-Spoof). typecheck/lint/**172 Unit + 44 Integration**/Build
-grün. NPM-Config unangetastet (app-seitiger Fix, kein globaler Proxy-Eingriff). **Deploy +
-Smoke-Test:** _(unten ergänzt)._
+grün. NPM-Config unangetastet (app-seitiger Fix, kein globaler Proxy-Eingriff). **Deployt v1.5.1**
+(Commit `e7d7f09`): Build grün, „No pending migrations", `healthy`. **Smoke-Test grün** (portal/
+admin/login 200, public-keys 200, admin-API 401, activate(leer) 400, gespoofter XFF → 200/kein
+Crash).
 
 ---
 

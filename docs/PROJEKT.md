@@ -15,7 +15,7 @@ an einer Stelle bündeln. Payment/Billing ist bewusst **kein** Teil (siehe CLAUD
 
 ## Aktueller Stand
 
-**LIVE in Produktion (v1.5.0)** auf `188.245.95.60`, erreichbar unter
+**LIVE in Produktion (v1.5.1)** auf `188.245.95.60`, erreichbar unter
 **https://license.tropicsoft.de**. Phasen 1–7 + Voll-Audit-Härtung + Fehlversuch-Protokoll,
 Integrationstests, Audit-Log-Retention, shared-types-Zentralisierung und PSP-agnostische
 Payment-Vorbereitung — alles live.
@@ -30,7 +30,7 @@ JSON-Fehlerhüllen. Test-Netz von 21 auf **44 Integrations- + 169 Unit-Tests** e
 Re-Audit (Workflow) GO + Härtungs-Pass; deployt, Smoke-Test grün. Details: CHANGELOG v1.5.0,
 LOGBUCH 2026-06-02.
 
-**v1.5.1 — X-Forwarded-For Anti-Spoofing (implementiert + verifiziert, Deploy ausstehend):**
+**v1.5.1 — X-Forwarded-For Anti-Spoofing (live, Commit `e7d7f09`):**
 Der NGX Proxy Manager hängt die echte Peer-IP an `X-Forwarded-For` an (überschreibt sie
 nicht), wodurch der erste XFF-Eintrag spoofbar war. `extractIp` bevorzugt jetzt das
 proxy-überschriebene `X-Real-IP` (Fallback: letzter XFF-Eintrag) → Per-IP-Rate-Limits wieder
@@ -100,7 +100,7 @@ Detail-Verifikation je Phase steht im git-Verlauf + [LOGBUCH.md](./LOGBUCH.md).
 | — | Fehlversuch-Protokoll + Integrationstests + Log-Retention (v1.3.0) | done, live |
 | — | PSP-agnostische Payment-Vorbereitung (v1.4.0) | done, live |
 | — | Voll-Audit-Härtung vor erster Lizenzierung (v1.5.0, 24/25 Findings) | done, live |
-| — | X-Forwarded-For Anti-Spoofing für Per-IP-Rate-Limits (v1.5.1) | done, Deploy ausstehend |
+| — | X-Forwarded-For Anti-Spoofing für Per-IP-Rate-Limits (v1.5.1) | done, live |
 
 ---
 
