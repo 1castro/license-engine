@@ -43,26 +43,40 @@ export function hashIp(ip: string | null | undefined): string | null {
 /**
  * Best-effort extraction of the client IP from a Next.js request.
  *
- * Reads `x-forwarded-for` (first entry) or `x-real-ip` ONLY if
- * `TRUST_PROXY_HEADERS=true` is set. In production behind a reverse proxy
- * with no direct public port-mapping on the app container (the only way
- * to reach the app is through the proxy), the proxy is the only source of
- * these headers, so trusting them is correct.
+ * Trusts proxy headers ONLY if `TRUST_PROXY_HEADERS=true`. In production the app
+ * container has no public port-mapping — the only way to reach it is through the
+ * reverse proxy (NGINX Proxy Manager), so the proxy is the sole source of these
+ * headers.
+ *
+ * Source priority (anti-spoofing):
+ *  1. `X-Real-IP` — NPM sets it to the real connecting peer (`$remote_addr`) and
+ *     OVERWRITES any client-supplied value → trustworthy, not spoofable.
+ *  2. `X-Forwarded-For` LAST entry — NPM APPENDS the real peer
+ *     (`$proxy_add_x_forwarded_for`), so the FIRST entry is attacker-controlled
+ *     and must NOT be used; the last entry is the hop the trusted proxy added.
+ *     (With an overwriting proxy first==last, so this stays correct.)
  *
  * Default `TRUST_PROXY_HEADERS=false` → returns null instead of trusting
- * attacker-supplied headers. Rate-limit buckets and audit-log IP hashes
- * collapse to a single "no-ip" key, which is safe but coarse. Production
- * deploys MUST set `TRUST_PROXY_HEADERS=true`.
+ * attacker-supplied headers. Rate-limit buckets and audit-log IP hashes then
+ * collapse to a single "no-ip" key (safe but coarse). Production deploys MUST
+ * set `TRUST_PROXY_HEADERS=true`.
  */
 export function extractIp(req: { headers: Headers } | Request): string | null {
   if (!getEnv().TRUST_PROXY_HEADERS) return null;
+  const xri = req.headers.get('x-real-ip');
+  if (xri) {
+    const v = xri.trim();
+    if (v) return v;
+  }
   const xff = req.headers.get('x-forwarded-for');
   if (xff) {
-    const first = xff.split(',')[0]?.trim();
-    if (first) return first;
+    const parts = xff
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    const last = parts[parts.length - 1];
+    if (last) return last;
   }
-  const xri = req.headers.get('x-real-ip');
-  if (xri) return xri.trim();
   return null;
 }
 

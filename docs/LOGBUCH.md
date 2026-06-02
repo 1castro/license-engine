@@ -4,6 +4,28 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-06-02 (Nachtrag) — X-Forwarded-For Anti-Spoofing (v1.5.1)
+
+Den im v1.5.0-Härtungs-Audit gemeldeten XFF-Follow-up am Live-System verifiziert und
+geschlossen. **Befund am NGINX Proxy Manager (.60, Container `nginx-proxy-manager`):** Die
+globale `proxy.conf` setzt `X-Forwarded-For $proxy_add_x_forwarded_for` (hängt die echte
+Peer-IP HINTEN an einen client-gesendeten XFF an) und `X-Real-IP $remote_addr` (überschreibt).
+`extractIp` nahm den **ersten** XFF-Eintrag → durch einen mitgeschickten `X-Forwarded-For`
+**spoofbar**, womit alle Per-IP-Rate-Limits (auch die schon länger live-laufenden
+activate/recheck/deactivate) umgehbar waren.
+
+**Fix (Option A, app-seitig):** `extractIp` bevorzugt jetzt `X-Real-IP` (vom Proxy
+überschrieben → vertrauenswürdig), Fallback auf den **letzten** XFF-Eintrag (der vom Proxy
+angehängte echte Peer). Mehrschichtige Schutzwälle (Per-Email-Limit, Backoff, harte
+Map-Obergrenze) waren ohnehin unabhängig wirksam. **Fokussierter Security-Audit (adversarisch):
+grün** — keine zweite ungeschützte XFF-Konsumstelle im Code (alle 17 IP-Quellen gehen über
+`extractIp`), legitime Fälle intakt, `TRUST_PROXY_HEADERS=false`→null korrekt. +3 Unit-Tests
+(X-Real-IP-Priorität, XFF-last, Anti-Spoof). typecheck/lint/**172 Unit + 44 Integration**/Build
+grün. NPM-Config unangetastet (app-seitiger Fix, kein globaler Proxy-Eingriff). **Deploy +
+Smoke-Test:** _(unten ergänzt)._
+
+---
+
 ## 2026-06-02 — Voll-Audit-Härtung vor erster Lizenzierung (v1.5.0)
 
 Auf Jans Wunsch ein **kompletter Workflow-Audit über die gesamte Engine, bevor das

@@ -44,18 +44,43 @@ describe('hashIp', () => {
 });
 
 describe('extractIp', () => {
-  it('prefers x-forwarded-for first entry', async () => {
+  it('prefers x-real-ip (proxy-overwritten, not spoofable) over x-forwarded-for', async () => {
     const { extractIp } = await import('../../src/lib/audit/audit-log');
+    // Attacker spoofs XFF[0]; the proxy appended the real peer and set X-Real-IP.
     const req = new Request('http://x.test', {
-      headers: { 'x-forwarded-for': '10.0.0.1, 10.0.0.2' },
+      headers: { 'x-forwarded-for': '1.2.3.4, 10.0.0.9', 'x-real-ip': '10.0.0.9' },
     });
-    expect(extractIp(req)).toBe('10.0.0.1');
+    expect(extractIp(req)).toBe('10.0.0.9');
   });
 
-  it('falls back to x-real-ip', async () => {
+  it('does NOT trust the first x-forwarded-for entry (anti-spoof)', async () => {
+    const { extractIp } = await import('../../src/lib/audit/audit-log');
+    // No X-Real-IP → fall back to XFF, but take the LAST (proxy-appended) entry,
+    // never the client-controlled first one.
+    const req = new Request('http://x.test', {
+      headers: { 'x-forwarded-for': '1.2.3.4, 10.0.0.2' },
+    });
+    expect(extractIp(req)).toBe('10.0.0.2');
+  });
+
+  it('uses x-real-ip when it is the only header', async () => {
     const { extractIp } = await import('../../src/lib/audit/audit-log');
     const req = new Request('http://x.test', { headers: { 'x-real-ip': '10.0.0.7' } });
     expect(extractIp(req)).toBe('10.0.0.7');
+  });
+
+  it('uses the single x-forwarded-for entry from an overwriting proxy', async () => {
+    const { extractIp } = await import('../../src/lib/audit/audit-log');
+    const req = new Request('http://x.test', { headers: { 'x-forwarded-for': '10.0.0.5' } });
+    expect(extractIp(req)).toBe('10.0.0.5');
+  });
+
+  it('falls back to x-forwarded-for last entry when x-real-ip is blank', async () => {
+    const { extractIp } = await import('../../src/lib/audit/audit-log');
+    const req = new Request('http://x.test', {
+      headers: { 'x-real-ip': '   ', 'x-forwarded-for': '1.2.3.4, 10.0.0.2' },
+    });
+    expect(extractIp(req)).toBe('10.0.0.2');
   });
 
   it('returns null when no IP header is present', async () => {

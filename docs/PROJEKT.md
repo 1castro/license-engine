@@ -30,9 +30,11 @@ JSON-Fehlerhüllen. Test-Netz von 21 auf **44 Integrations- + 169 Unit-Tests** e
 Re-Audit (Workflow) GO + Härtungs-Pass; deployt, Smoke-Test grün. Details: CHANGELOG v1.5.0,
 LOGBUCH 2026-06-02.
 
-**Offener Infra-Follow-up:** verifizieren, dass NGX Proxy Manager das Client-`X-Forwarded-For`
-**überschreibt** (nicht anhängt) — sonst bleiben die Per-IP-Rate-Limits via XFF-Spoofing
-umgehbar (vorbestehend; Memory ist durch die harte Map-Obergrenze ohnehin gedeckelt).
+**v1.5.1 — X-Forwarded-For Anti-Spoofing (implementiert + verifiziert, Deploy ausstehend):**
+Der NGX Proxy Manager hängt die echte Peer-IP an `X-Forwarded-For` an (überschreibt sie
+nicht), wodurch der erste XFF-Eintrag spoofbar war. `extractIp` bevorzugt jetzt das
+proxy-überschriebene `X-Real-IP` (Fallback: letzter XFF-Eintrag) → Per-IP-Rate-Limits wieder
+verlässlich. NPM-Config unangetastet.
 
 **Payment-Status:** Vorbereitung steht (Display-Metadaten an der Lizenz, `polar`-Quelle,
 externalRef-Lookup für idempotente Verlängerung). **Keine Payment-Logik** — die kommt
@@ -98,6 +100,7 @@ Detail-Verifikation je Phase steht im git-Verlauf + [LOGBUCH.md](./LOGBUCH.md).
 | — | Fehlversuch-Protokoll + Integrationstests + Log-Retention (v1.3.0) | done, live |
 | — | PSP-agnostische Payment-Vorbereitung (v1.4.0) | done, live |
 | — | Voll-Audit-Härtung vor erster Lizenzierung (v1.5.0, 24/25 Findings) | done, live |
+| — | X-Forwarded-For Anti-Spoofing für Per-IP-Rate-Limits (v1.5.1) | done, Deploy ausstehend |
 
 ---
 

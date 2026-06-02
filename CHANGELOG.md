@@ -7,6 +7,23 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [1.5.1] - 2026-06-02 — X-Forwarded-For Anti-Spoofing (Per-IP-Rate-Limits)
+
+Nachgelagerter Sicherheits-Fix nach Verifikation der Reverse-Proxy-Konfiguration
+(Befund aus dem v1.5.0-Härtungs-Audit, jetzt abschließend geschlossen).
+
+### Sicherheit
+- **`extractIp` nicht mehr per `X-Forwarded-For` spoofbar.** Der NGINX Proxy Manager
+  hängt die echte Peer-IP **hinten** an einen ggf. client-gesendeten `X-Forwarded-For`
+  an (`$proxy_add_x_forwarded_for`) — der bisher genutzte **erste** Eintrag war damit
+  angreifer-kontrolliert, sodass alle Per-IP-Rate-Limits (activate/recheck/deactivate,
+  Login-IP, discovery, forgot-IP) durch einen rotierenden XFF-Header umgehbar waren.
+  `extractIp` bevorzugt jetzt **`X-Real-IP`** (vom Proxy mit `$remote_addr` überschrieben →
+  nicht spoofbar) und fällt nur auf den **letzten** XFF-Eintrag zurück. Per-Email-Limit,
+  progressiver Backoff und die harte Map-Obergrenze waren bereits unabhängig wirksam.
+
+---
+
 ## [1.5.0] - 2026-06-02 — Voll-Audit-Härtung vor erster Lizenzierung
 
 Kompletter Workflow-Audit über die gesamte Engine (Code/Logik/Security, Recall-Modus)
