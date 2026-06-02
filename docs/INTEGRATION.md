@@ -54,6 +54,28 @@ keinen gecachten Zustand, auf den man sich verlassen könnte → im Zweifel **sp
 Grace-Period (Punkt 4) greift bewusst nur, wenn schon einmal erfolgreich ein Token
 ausgestellt wurde.
 
+**Fehler-Semantik beim Re-Check (wichtig für die App-Logik, ab v1.5.0):** Nicht
+jeder Fehler bedeutet „Lizenz ungültig". Die App muss unterscheiden:
+
+| Antwort | Bedeutung | App-Reaktion |
+|---|---|---|
+| `5xx` / `429` (rate-limited) | transienter Server-/Drossel-Fehler | **wie Server-Ausfall** → Grace, Cache-Token bis `exp` weiternutzen |
+| `unknown_product` / `validation_error` | **Fehlkonfiguration** der App (falscher `productSlug`, kaputter Payload) | nicht als „Lizenz ungültig" behandeln → Config prüfen, **kein** Sperren des Nutzers |
+| `revoked` / `expired` / `license_not_active` | echtes Lizenz-Verdikt | sperren |
+| `bindings_released` | der Seat dieses Tokens wurde zentral freigegeben | **neu aktivieren** (nicht als tot behandeln) |
+| `token_*` (z.B. nach Key-Rotation) | Cache-Token unbrauchbar | Cache verwerfen + neu aktivieren |
+
+Das **JS/TS-SDK** macht diese Unterscheidung bereits: 5xx/429 → `ServerUnreachableError`
+(mit Grace-Info), Fehlkonfiguration → `LicenseConfigError`, Verdikt → `LicenseExpiredError`/
+`LicenseRevokedError`, Seat freigegeben → `BindingsReleasedError`. Eine **REST-direkte
+App** (z.B. der Fahrdienst per `curl`) muss diese Fälle selbst anhand des `error.code`
+mappen — nicht jeden Non-2xx pauschal als „Lizenz weg" werten.
+
+**Uhren-Toleranz:** Token-Verifikation (Server + SDK) toleriert ±30 s Uhren-Differenz
+(`nbf`/`exp`), damit ein gerade ausgestelltes Token auf einem Client mit leicht
+abweichender Systemuhr nicht fälschlich abgelehnt wird. REST-direkte Apps, die selbst
+verifizieren, sollten dieselbe kleine Toleranz einplanen.
+
 ---
 
 ## 3. Binding-Modelle
@@ -73,6 +95,13 @@ ihren Platz **dauerhaft**, bis sie aktiv freigegeben wird (`POST /api/v1/deactiv
 oder über die Verwaltung). Erneutes Aktivieren desselben Bindings reaktiviert den
 alten Platz (kein verbrannter Seat). Beim Erreichen von `maxPerType` lehnt die
 Engine mit `binding_max_exceeded` (409) ab.
+
+> **deactivate gibt nur eigene Bindings frei (ab v1.5.0):** `POST /api/v1/deactivate`
+> verlangt das Token **dieses** Seats und gibt nur ein Binding frei, das das vorgelegte
+> Token tatsächlich trägt. Der Versuch, mit Token A einen fremden Seat B derselben
+> Lizenz freizugeben, wird mit `binding_not_owned` (403) abgelehnt. Wer fremde Plätze
+> freigeben können soll (zentrale Verwaltung), nutzt das **Portal** oder die
+> **Service-API** (`activations:write`), nicht das Client-Token.
 
 **Belegung ist aktivitätsbasiert, nicht login-gebunden (universell + wichtig):**
 Ein Seat wird gesichert, sobald ein Nutzer/Gerät mit seinem Account **aktiv ist** —
@@ -210,3 +239,25 @@ nutzt dieselbe API/dasselbe Portal. Einmal in der Engine gebaut, überall wieder
   pro Account, freundliche Limit-Meldung) — **kein** Lizenz-Panel in der App,
   Verwaltung läuft übers Portal. Auf Basis eines kopierbaren Prompts aus dem
   License-Engine-Chat, gegen die fertige Engine-API.
+
+---
+
+## 8. Stabile Verträge & bekannte Grenzen
+
+**Produkt-Slug ist nach Erstellung unveränderlich (ab v1.5.0).** Der Slug ist die
+JWT-Audience (`aud`) jedes ausgestellten Tokens **und** der `productSlug`, mit dem die
+App/das SDK konfiguriert wird. Würde er umbenannt, scheiterten schlagartig alle
+bestehenden Tokens beim Re-Check (`aud`-Mismatch) und die App könnte sich nicht mehr
+lizenzieren. Die Engine lässt den Slug daher nach dem Anlegen nicht mehr ändern (im
+Admin-Formular gesperrt). **Beim Anlegen sorgfältig wählen** — ein „Umbenennen" wäre
+faktisch ein neues Produkt + Neu-Aktivierung aller Clients.
+
+**Bekannte Grenze fürs spätere PSP-Sync-Modul (#15, heute folgenlos).** Die idempotente
+Kunden-/Lizenz-Erstellung dedupliziert über `(externalSource, externalRef)`. Ein Kunde,
+der **per E-Mail bereits existiert** (z.B. manuell angelegt, `externalRef = NULL`), lässt
+sich von einem späteren PSP-Webhook mit **neuer** `externalRef` aktuell **nicht** idempotent
+verknüpfen — der Insert würde an der E-Mail-UNIQUE-Schranke mit `409` scheitern statt zu
+verknüpfen. Blast-Radius **heute null** (kein PSP-Sync aktiv, alle Lizenzen manuell). Beim
+Bau des Sync-Moduls ist ein **E-Mail-basierter Upsert/Link-Pfad** (statt hartem 409)
+vorzusehen und die idempotente Create in eine Transaktion mit constraint-getriebenem Retry
+zu kapseln.

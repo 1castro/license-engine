@@ -123,6 +123,11 @@ export async function verifyLicenseToken(
       algorithms: [SIGNING_ALGORITHM],
       issuer: input.expectedIssuer ?? env.JWT_ISSUER,
       audience: input.expectedAudience,
+      // Absorb small clock skew between server-at-signing and the verifying host
+      // so a token isn't wrongly rejected as expired/not-yet-valid right at its
+      // boundary. 30s is well below the 12h re-check cadence, so it doesn't
+      // meaningfully delay revocation/expiry taking effect.
+      clockTolerance: '30s',
     });
     return payload as LicenseTokenClaims;
   } catch (err) {

@@ -57,7 +57,19 @@ export async function signPortalSession(input: { customerId: string; email: stri
   return { token, expiresAt: new Date(exp * 1000) };
 }
 
-export async function verifyPortalSession(token: string): Promise<PortalSessionPayload | null> {
+/**
+ * Verifies ONLY the cryptographic signature + standard claims of a portal
+ * session JWT. It deliberately does NOT apply the server-side state anchor
+ * (`portalSessionsValidAfter` / customer existence). Do NOT use this to gate
+ * access — use {@link getPortalSession}, the single entry point that adds the
+ * state check. Exported only for unit tests of the crypto layer; the explicit
+ * `…Signature` name prevents a future caller from mistaking it for a full,
+ * revocation-aware session check (a footgun that would keep a post-reset/
+ * logout-all session valid until its 30-day exp).
+ */
+export async function verifyPortalSessionSignature(
+  token: string,
+): Promise<PortalSessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, secretBytes(), {
       algorithms: [ALG],
@@ -82,7 +94,7 @@ export async function getPortalSession(): Promise<PortalSessionPayload | null> {
   const jar = await cookies();
   const c = jar.get(PORTAL_COOKIE_NAME);
   if (!c?.value) return null;
-  const payload = await verifyPortalSession(c.value);
+  const payload = await verifyPortalSessionSignature(c.value);
   if (!payload) return null;
 
   // Stateless-JWT invalidation: reject sessions issued before the customer's

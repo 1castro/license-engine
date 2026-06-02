@@ -8,6 +8,7 @@ import { getLogger } from '@/lib/logger';
 import { recheckLimiter } from '@/lib/auth/rate-limit';
 import { getSeatUsage } from '@/lib/binding/activation-service';
 import { parseBindingPolicy } from '@/lib/binding/binding-policy';
+import { expireLicense } from '@/lib/services/license-service';
 import {
   signLicenseToken,
   TokenVerificationError,
@@ -114,25 +115,9 @@ async function handleRecheck(req: Request): Promise<NextResponse> {
     return NextResponse.json({ status: 'expired' } satisfies RecheckResponse);
   }
   if (license.expiresAt && license.expiresAt.getTime() <= Date.now()) {
-    // Lazy-expire: flip the DB row and write a single LicenseExpired audit entry
-    // so the dashboard reflects reality even if no background job ran. Idempotent
-    // because we only update when status is still 'active' — concurrent rechecks
-    // race the updateMany, but only one wins and writes the audit log.
-    const flipped = await prisma.license.updateMany({
-      where: { id: license.id, status: LicenseStatus.active },
-      data: { status: LicenseStatus.expired },
-    });
-    if (flipped.count === 1) {
-      await writeAuditLog({
-        eventType: AuditEventType.LicenseExpired,
-        actorType: 'system',
-        actorId: null,
-        targetType: 'License',
-        targetId: license.id,
-        metadata: { reason: 'expiresAt-elapsed', source: 'recheck' },
-        ip,
-      });
-    }
+    // Lazy-expire (+ release seats), centralised in expireLicense. Idempotent:
+    // only a still-active row flips, so concurrent rechecks don't double-count.
+    await expireLicense(license.id, 'recheck', ip);
     return NextResponse.json({ status: 'expired' } satisfies RecheckResponse);
   }
 

@@ -10,16 +10,15 @@
  * Usage: `pnpm tsx scripts/expire-licenses.ts`
  * Designed to be invoked from a host-level cron once a day at minute 0.
  */
-import { LicenseStatus, PrismaClient } from '@prisma/client';
-import { writeAuditLog, AuditEventType } from '../src/lib/audit';
-
-const prisma = new PrismaClient();
+import { LicenseStatus } from '@prisma/client';
+import { prisma } from '../src/lib/prisma';
+import { expireLicense } from '../src/lib/services/license-service';
 
 async function main() {
   const now = new Date();
   const candidates = await prisma.license.findMany({
     where: { status: LicenseStatus.active, expiresAt: { not: null, lte: now } },
-    select: { id: true, expiresAt: true },
+    select: { id: true },
   });
 
   if (candidates.length === 0) {
@@ -27,24 +26,10 @@ async function main() {
     return;
   }
 
+  // expireLicense flips status AND releases seats in one transaction (idempotent).
   let flipped = 0;
   for (const c of candidates) {
-    const res = await prisma.license.updateMany({
-      where: { id: c.id, status: LicenseStatus.active },
-      data: { status: LicenseStatus.expired },
-    });
-    if (res.count === 1) {
-      flipped += 1;
-      await writeAuditLog({
-        eventType: AuditEventType.LicenseExpired,
-        actorType: 'system',
-        actorId: null,
-        targetType: 'License',
-        targetId: c.id,
-        metadata: { reason: 'expiresAt-elapsed', source: 'cron' },
-        ip: null,
-      });
-    }
+    if (await expireLicense(c.id, 'cron', null)) flipped += 1;
   }
   console.log(
     JSON.stringify({

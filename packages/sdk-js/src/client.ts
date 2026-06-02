@@ -4,6 +4,7 @@ import { normalizeLicenseKey, validateLicenseKey } from './license-key';
 import {
   BindingMismatchError,
   BindingsReleasedError,
+  LicenseConfigError,
   LicenseExpiredError,
   LicenseInvalidKeyError,
   LicenseNotActiveError,
@@ -48,6 +49,18 @@ export interface LicenseClient {
   deactivate(binding: { type: BindingInput['type']; value: string }): Promise<{ released: boolean }>;
   /** Clears all locally-cached license state (token, keys, bindings). */
   clear(): Promise<void>;
+}
+
+/**
+ * Defensively coerces the token's `features` claim to a string[]. The payload
+ * is cast from JWT without runtime validation, so a token lacking the claim (or
+ * carrying a non-array) would otherwise yield `undefined` and crash the
+ * integrating app the moment it calls `.includes()`/`.map()` on it.
+ */
+function readFeatures(claims: { features?: unknown }): string[] {
+  return Array.isArray(claims.features)
+    ? claims.features.filter((f): f is string => typeof f === 'string')
+    : [];
 }
 
 export function createLicenseClient(config: LicenseClientConfig): LicenseClient {
@@ -154,7 +167,7 @@ export function createLicenseClient(config: LicenseClientConfig): LicenseClient 
     return {
       licenseKey: canonicalKey,
       productSlug: config.productSlug,
-      features: claims.features,
+      features: readFeatures(claims),
       expiresAt: new Date(body.expiresAt),
       token: body.token,
       refreshedFromServer: true,
@@ -177,11 +190,17 @@ export function createLicenseClient(config: LicenseClientConfig): LicenseClient 
     }
     if (!res.ok) {
       try {
-        await mapHttpError(res, 'recheck');
+        await mapHttpError(res, 'recheck', state.expiresAt);
       } catch (err) {
         // The license is fine but every binding on this token was released
         // (seat freed centrally). Drop the stale cache so the app re-activates.
         if (err instanceof BindingsReleasedError) await clearState();
+        // The cached token is permanently unusable for verification (e.g. its
+        // kid no longer verifies after key rotation → token_signature_invalid,
+        // or token_expired/_malformed). Re-presenting it will fail forever, so
+        // drop it; the only recovery is a fresh activate(). Without this the
+        // client loops on the same hard error and never self-heals.
+        if (err instanceof LicenseTokenInvalidError) await clearState();
         throw err;
       }
     }
@@ -215,7 +234,7 @@ export function createLicenseClient(config: LicenseClientConfig): LicenseClient 
     return {
       licenseKey: next.licenseKey,
       productSlug: next.productSlug,
-      features: claims.features,
+      features: readFeatures(claims),
       expiresAt: new Date(next.expiresAt),
       token: next.token,
       refreshedFromServer: true,
@@ -246,8 +265,15 @@ export function createLicenseClient(config: LicenseClientConfig): LicenseClient 
     }
 
     // Second: if the recheck interval has elapsed, try a server roundtrip.
-    const nextRecheckAt =
-      new Date(state.lastRecheckAt).getTime() + state.recheckIntervalHours * 3600 * 1000;
+    // Guard against a corrupt/unparseable lastRecheckAt (storage corruption,
+    // older schema, manual tampering): getTime() → NaN, and `Date.now() >= NaN`
+    // is always false, which would silently disable rechecks forever and let a
+    // revoked token validate offline until exp. Treat NaN as "overdue" so we
+    // force a server roundtrip instead.
+    const lastRecheckMs = new Date(state.lastRecheckAt).getTime();
+    const nextRecheckAt = Number.isNaN(lastRecheckMs)
+      ? Number.NEGATIVE_INFINITY
+      : lastRecheckMs + state.recheckIntervalHours * 3600 * 1000;
     let currentState = state;
     let refreshed = false;
     if (Date.now() >= nextRecheckAt) {
@@ -269,7 +295,7 @@ export function createLicenseClient(config: LicenseClientConfig): LicenseClient 
     return {
       licenseKey: currentState.licenseKey,
       productSlug: currentState.productSlug,
-      features: claims.features,
+      features: readFeatures(claims),
       expiresAt: new Date(currentState.expiresAt),
       token: currentState.token,
       refreshedFromServer: refreshed && !usedCachedKeys,
@@ -298,7 +324,7 @@ export function createLicenseClient(config: LicenseClientConfig): LicenseClient 
       );
     }
     if (!res.ok) {
-      await mapHttpError(res, 'deactivate');
+      await mapHttpError(res, 'deactivate', state.expiresAt);
     }
     return (await res.json()) as { released: boolean };
   }
@@ -310,7 +336,7 @@ export function createLicenseClient(config: LicenseClientConfig): LicenseClient 
   return { activate, validate, recheck, deactivate, clear };
 }
 
-async function mapHttpError(res: Response, op: string): Promise<never> {
+async function mapHttpError(res: Response, op: string, graceExpiresAt?: string): Promise<never> {
   let body: { error?: { code?: string; message?: string } } = {};
   try {
     body = (await res.json()) as typeof body;
@@ -320,12 +346,40 @@ async function mapHttpError(res: Response, op: string): Promise<never> {
   const code = body.error?.code ?? `http_${res.status}`;
   const message = body.error?.message ?? `Request failed with status ${res.status}`;
 
+  // A 5xx is a server-side failure, not a license verdict. Treat it like
+  // unreachability so the cached token's grace window applies — otherwise a
+  // transient 500 would surface as LicenseNotActiveError and hard-block a paying
+  // user whose license is actually fine. Grace info is known on recheck/
+  // deactivate (we hold the cached token's expiry); activate has no prior token.
+  if (res.status >= 500) {
+    const within = graceExpiresAt ? new Date(graceExpiresAt).getTime() > Date.now() : false;
+    throw new ServerUnreachableError(
+      `Server error during ${op} (HTTP ${res.status}): ${message}`,
+      within,
+      graceExpiresAt ? new Date(graceExpiresAt) : undefined,
+    );
+  }
+
   if (code === 'invalid_license_key') throw new LicenseInvalidKeyError(message);
   if (code === 'bindings_released') throw new BindingsReleasedError(message);
   if (code === 'license_not_active') throw new LicenseNotActiveError(message);
+  // Integration/config errors — the SDK is set up wrong or sent a bad payload.
+  // Distinct from a license verdict so a misconfiguration doesn't masquerade
+  // as "license inactive".
+  if (code === 'unknown_product' || code === 'validation_error' || code === 'invalid_json') {
+    throw new LicenseConfigError(code, message);
+  }
   if (code.startsWith('binding_')) throw new BindingMismatchError(message);
   if (code === 'rate_limited') {
-    throw new ServerUnreachableError(`Rate-limited during ${op}: ${message}`, false);
+    // A 429 is a transient throttle (e.g. a NAT exhausting the per-IP limit),
+    // not a license verdict — apply the same grace as a network error so a
+    // still-valid cached token isn't discarded over a temporary block.
+    const within = graceExpiresAt ? new Date(graceExpiresAt).getTime() > Date.now() : false;
+    throw new ServerUnreachableError(
+      `Rate-limited during ${op}: ${message}`,
+      within,
+      graceExpiresAt ? new Date(graceExpiresAt) : undefined,
+    );
   }
   if (code.startsWith('token_')) throw new LicenseTokenInvalidError(code, message);
 

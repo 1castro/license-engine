@@ -4,8 +4,11 @@ import {
   activateLimiter,
   recheckLimiter,
   loginLimiter,
+  loginIpLimiter,
   portalForgotLimiter,
+  portalForgotIpLimiter,
   portalPasswordLimiter,
+  discoveryLimiter,
 } from '@/lib/auth/rate-limit';
 
 /**
@@ -31,7 +34,16 @@ beforeEach(async () => {
   );
   // Rate limiters are module-level singletons whose token buckets otherwise
   // bleed across tests — reset them so per-test IP usage starts fresh.
-  for (const l of [activateLimiter, recheckLimiter, loginLimiter, portalForgotLimiter, portalPasswordLimiter]) {
+  for (const l of [
+    activateLimiter,
+    recheckLimiter,
+    loginLimiter,
+    loginIpLimiter,
+    portalForgotLimiter,
+    portalForgotIpLimiter,
+    portalPasswordLimiter,
+    discoveryLimiter,
+  ]) {
     l.reset();
   }
 });

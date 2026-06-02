@@ -15,6 +15,7 @@ import {
   MAX_BINDINGS_PER_ACTIVATE,
 } from '@/lib/binding/activation-service';
 import { BindingPolicyViolationError, parseBindingPolicy } from '@/lib/binding/binding-policy';
+import { expireLicense } from '@/lib/services/license-service';
 import { signLicenseToken } from '@/lib/token/token-service';
 
 export const dynamic = 'force-dynamic';
@@ -154,22 +155,9 @@ async function handleActivate(
     return jsonError(403, 'license_not_active', 'License is not active');
   }
   if (license.expiresAt && license.expiresAt.getTime() <= Date.now()) {
-    // Lazy-expire on read so the row state matches reality even without a job.
-    const flipped = await prisma.license.updateMany({
-      where: { id: license.id, status: LicenseStatus.active },
-      data: { status: LicenseStatus.expired },
-    });
-    if (flipped.count === 1) {
-      await writeAuditLog({
-        eventType: AuditEventType.LicenseExpired,
-        actorType: 'system',
-        actorId: null,
-        targetType: 'License',
-        targetId: license.id,
-        metadata: { reason: 'expiresAt-elapsed', source: 'activate' },
-        ip,
-      });
-    }
+    // Lazy-expire on read (+ release seats) so the row state matches reality
+    // even without the cron. Centralised in expireLicense for consistency.
+    await expireLicense(license.id, 'activate', ip);
     await auditActivationRejected('lizenz_abgelaufen', { licenseId: license.id }, ip);
     return jsonError(403, 'license_not_active', 'License has expired');
   }

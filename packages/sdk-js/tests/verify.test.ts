@@ -102,4 +102,72 @@ describe('SDK verifyLicenseToken', () => {
       }),
     ).rejects.toBeInstanceOf(LicenseTokenInvalidError);
   });
+
+  // --- N6: clockTolerance absorbs small clock skew --------------------------
+  it('accepts a token whose nbf is a few seconds in the future (clock skew)', async () => {
+    const { publicKeyEntry, privateKey } = await makeKeyEntry('avatar-pro', 'kid_a');
+    const now = Math.floor(Date.now() / 1000);
+    const token = await new SignJWT({ features: [] })
+      .setProtectedHeader({ alg: 'EdDSA', kid: 'kid_a', typ: 'JWT' })
+      .setIssuer('license.test')
+      .setAudience('avatar-pro')
+      .setSubject('lic_1')
+      .setIssuedAt(now)
+      .setNotBefore(now + 10) // client clock 10s behind the signing server
+      .setExpirationTime(now + 3600)
+      .sign(privateKey);
+
+    const claims = await verifyLicenseToken({
+      token,
+      publicKeys: [publicKeyEntry],
+      expectedProductSlug: 'avatar-pro',
+      expectedIssuer: 'license.test',
+    });
+    expect(claims.sub).toBe('lic_1');
+  });
+
+  it('accepts a token that expired a few seconds ago (clock skew within tolerance)', async () => {
+    const { publicKeyEntry, privateKey } = await makeKeyEntry('avatar-pro', 'kid_a');
+    const now = Math.floor(Date.now() / 1000);
+    const token = await new SignJWT({ features: [] })
+      .setProtectedHeader({ alg: 'EdDSA', kid: 'kid_a', typ: 'JWT' })
+      .setIssuer('license.test')
+      .setAudience('avatar-pro')
+      .setSubject('lic_1')
+      .setIssuedAt(now - 3600)
+      .setExpirationTime(now - 10) // expired 10s ago, inside the 30s tolerance
+      .sign(privateKey);
+
+    const claims = await verifyLicenseToken({
+      token,
+      publicKeys: [publicKeyEntry],
+      expectedProductSlug: 'avatar-pro',
+      expectedIssuer: 'license.test',
+    });
+    expect(claims.sub).toBe('lic_1');
+  });
+
+  // --- N7: not-yet-valid is its own code, not signature_invalid -------------
+  it('reports a token far before its nbf as not_yet_valid, not signature_invalid', async () => {
+    const { publicKeyEntry, privateKey } = await makeKeyEntry('avatar-pro', 'kid_a');
+    const now = Math.floor(Date.now() / 1000);
+    const token = await new SignJWT({ features: [] })
+      .setProtectedHeader({ alg: 'EdDSA', kid: 'kid_a', typ: 'JWT' })
+      .setIssuer('license.test')
+      .setAudience('avatar-pro')
+      .setSubject('lic_1')
+      .setIssuedAt(now)
+      .setNotBefore(now + 600) // 10 min in the future — well past the tolerance
+      .setExpirationTime(now + 3600)
+      .sign(privateKey);
+
+    await expect(
+      verifyLicenseToken({
+        token,
+        publicKeys: [publicKeyEntry],
+        expectedProductSlug: 'avatar-pro',
+        expectedIssuer: 'license.test',
+      }),
+    ).rejects.toMatchObject({ code: 'not_yet_valid' });
+  });
 });

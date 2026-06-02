@@ -87,6 +87,38 @@ export async function callActivate(
   return { status: res.status, json };
 }
 
+/** Calls the real POST /api/v1/recheck handler. */
+export async function callRecheck(
+  body: { token: string; productSlug: string },
+  ip = '203.0.113.2',
+) {
+  const { POST } = await import('@/app/api/v1/recheck/route');
+  const req = new Request('http://localhost/api/v1/recheck', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': ip },
+    body: JSON.stringify(body),
+  });
+  const res = await POST(req);
+  const json = (await res.json()) as Record<string, unknown>;
+  return { status: res.status, json };
+}
+
+/** Calls the real POST /api/v1/deactivate handler. */
+export async function callDeactivate(
+  body: { token: string; productSlug: string; bindingType: string; bindingValue: string },
+  ip = '203.0.113.3',
+) {
+  const { POST } = await import('@/app/api/v1/deactivate/route');
+  const req = new Request('http://localhost/api/v1/deactivate', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': ip },
+    body: JSON.stringify(body),
+  });
+  const res = await POST(req);
+  const json = (await res.json()) as Record<string, unknown>;
+  return { status: res.status, json };
+}
+
 /** Counts activation.rejected audit rows, optionally for one license. */
 export function countRejected(licenseId?: string): Promise<number> {
   return prisma.auditLog.count({

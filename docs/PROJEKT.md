@@ -20,6 +20,16 @@ an einer Stelle bündeln. Payment/Billing ist bewusst **kein** Teil (siehe CLAUD
 Integrationstests, Audit-Log-Retention, shared-types-Zentralisierung und PSP-agnostische
 Payment-Vorbereitung — alles live.
 
+**v1.5.0 — Voll-Audit-Härtung (implementiert + verifiziert, Deploy ausstehend):** Kompletter
+Workflow-Audit (Code/Logik/Security) über die gesamte Engine **vor der ersten echten
+Lizenzierung**. 24 von 25 Findings behoben (1 Blocker, 8 Major, 15 Minor; #15 zurückgestellt
+bis Sync-Modul). Kern: Un-Expire-Blocker (Renew einer abgelaufenen Lizenz wirkt wieder),
+Seat-Freigabe bei Expire, deactivate-Binding-Ownership, Slug-Immutabilität, clockTolerance,
+IP-unabhängige Mail-Bomb-Schranke, begrenzter Rate-Limiter-Speicher, einheitliche
+JSON-Fehlerhüllen. Test-Netz von 21 auf **44 Integrations- + 168 Unit-Tests** erweitert.
+typecheck/lint/Build grün. Re-Audit + Deploy abschließend (Details: CHANGELOG v1.5.0,
+LOGBUCH 2026-06-02). **Nach Deploy auf „LIVE (v1.5.0)" hochziehen.**
+
 **Payment-Status:** Vorbereitung steht (Display-Metadaten an der Lizenz, `polar`-Quelle,
 externalRef-Lookup für idempotente Verlängerung). **Keine Payment-Logik** — die kommt
 später als separates Sync-Modul. PSP-Wahl offen (PSP-Eval empfahl Merchant-of-Record;
@@ -82,6 +92,8 @@ Detail-Verifikation je Phase steht im git-Verlauf + [LOGBUCH.md](./LOGBUCH.md).
 | A | Seat-Management für App-Lizenzierung | done |
 | — | v1.2.0 Voll-Audit-Härtung (Multi-Tenant, Quota, Portal-Session) | done |
 | — | Fehlversuch-Protokoll + Integrationstests + Log-Retention (v1.3.0) | done, live |
+| — | PSP-agnostische Payment-Vorbereitung (v1.4.0) | done, live |
+| — | Voll-Audit-Härtung vor erster Lizenzierung (v1.5.0, 24/25 Findings) | done, Deploy ausstehend |
 
 ---
 

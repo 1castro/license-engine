@@ -73,6 +73,7 @@
     "subtitle": "Products with feature catalog and license defaults",
     "empty": "No products yet.",
     "slug": "Slug",
+    "slugImmutableHint": "The slug cannot be changed after creation — it is part of every issued token and of the SDK config of integrating apps.",
     "name": "Name",
     "recheckInterval": "Recheck (h)",
     "jwtLifetime": "JWT lifetime (h)",

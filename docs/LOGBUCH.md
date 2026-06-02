@@ -4,6 +4,95 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-06-02 — Voll-Audit-Härtung vor erster Lizenzierung (v1.5.0)
+
+Auf Jans Wunsch ein **kompletter Workflow-Audit über die gesamte Engine, bevor das
+erste Produkt real lizenziert wird** ("volles Programm"). Erst Audit, dann alle
+Findings außer #15 fixen, in drei verifizierten Batches, dann ein gebündelter Deploy.
+
+**Audit-Lauf (Scope `f3c4b93` = live v1.4.0, gesamte Codebasis):** Workflow im
+Recall-Modus — 9 Finder-Linsen (Code/Logik/Security, zeilenweise + Sprach-Pitfalls)
+→ adversariale Verifikation → Sweep → Synthese. 2 Linsen fielen mit dem Bug-Agent-
+Schema aus, per general-purpose-Agent nachgeholt. **Ergebnis: GO_MIT_AUFLAGEN** —
+Fundament wasserdicht (Token-Signing/-Verification, Ed25519-Key-Rotation mit Grace,
+FOR-UPDATE-Quota-Lock, Multi-Tenant-Isolation, Audit-Hashing, Widerrufspfad), aber
+**25 Findings**: 1 Blocker, 8 Major, 16 Minor (15 Haupt + N-Serie aus dem Nachhol-Audit).
+
+**Der Blocker (#1):** `updateLicense` setzte eine `expired`-Lizenz nie zurück auf
+`active`; activate/recheck prüfen `status` **vor** `expiresAt` → ein verlängerter,
+zahlender Kunde wäre dauerhaft ausgesperrt, ohne Heilpfad. Genau der dokumentierte
+Renew-Pfad. Gekoppelt dazu N1: Lazy-Expire gab die Seats nicht frei (anders als
+revoke) → Seat-Buchhaltung divergiert dauerhaft.
+
+**Fix-Arbeit (24 von 25, #15 zurückgestellt), drei Batches je verifiziert:**
+
+- **Batch 1 — Korrektheit & Sicherheit (Pflicht vor Live):** #1 Un-Expire
+  (expired→active nur bei Zukunfts-/perpetual-`expiresAt`, nie revoked) + N1 zentrale
+  `expireLicense()` mit Seat-Freigabe in Transaktion (3 Aufrufer: activate/recheck/
+  Cron, idempotent + Audit); N6 clockTolerance 30s in beiden Verifiern; N7 nbf/iat →
+  `not_yet_valid`; N4 Slug immutable (Schema + UI); #10/N5 deactivate-Binding-Ownership
+  gegen `claims.bindings`; #2 mapHttpError 5xx→Grace + `LicenseConfigError`; #3/N2
+  IP-unabhängige Mail-Bomb-Schranke + Login-Pro-IP-Gate; #4 node:os statischer Import.
+- **Batch 2 — Härtung:** #8 429→Grace; #9 clearState bei `token_*`; N8 NaN-`lastRecheckAt`-
+  Guard; N9 `features`-Coercion; #11 Dashboard N+1→ein `groupBy`; #12 public-keys
+  Rate-Limit + 500-Hülle; #13 Portal-Routen JSON-500-Hülle; #14 `verifyPortalSession`→
+  `…Signature` gekapselt; N3 E-Mail-Wechsel-Hygiene; N10 Rate-Limiter-/Backoff-Map-
+  Eviction (gegen XFF-Spoof-OOM, neuer `size()`-Accessor).
+- **Batch 3 — Test-Netz (#5/#6/#7 + Regressionen):** +23 Integrationstests (recheck-
+  Lifecycle inkl. Un-Expire + Seat-Release, deactivate inkl. Ownership + Quota-
+  Concurrency, `authenticateApiKey`, `getPortalSession`-State-Anker via gemocktem
+  `next/headers`, public-keys), +13 Unit/SDK-Tests (SDK-Grace-Statemachine über
+  Stub-Fetch, clockTolerance/nbf, Rate-Limit-Eviction mit Fake-Timern, Slug-Schema).
+
+**Verifikation grün:** typecheck · lint · **168 Unit (137 Server + 31 SDK)** ·
+**44 Integration** (vorher 21) · Production-Build. 30 Dateien geändert/neu
+(24 Quell- + 6 Test), +652/−133.
+
+**Re-Audit (Workflow, Scope = Working-Tree-Diff über `f3c4b93`):** 4 Fix-Verify-Agenten
+über die 24 Fixes + 3 CLAUDE.md-Dimensionen (Code/Logik/Security) über den Diff +
+adversariale Verifikation jedes neuen Befunds. **Verdikt: GO.** Alle 24 Fixes (31 Prüf-
+Einträge) als korrekt + vollständig bestätigt, 0 unvollständig/regressed. **6 neue Befunde,
+ausnahmslos minor** (keine Blocker/Major):
+1. `loginIpLimiter` zieht einen Token bei jedem passierenden Request (auch Erfolg/vor
+   Backoff) → geteilte Büro-NAT könnte den 20/min-Bucket schneller leeren (Tuning).
+2. Un-Expire lässt die bei Expire freigegebenen Seats auf `released` → Renew zeigt `used:0`
+   und zwingt Clients beim nächsten recheck zu `bindings_released` (Re-Activate). **Bewusst so**
+   (getestet/dokumentiert); der Fahrdienst aktiviert per-Request automatisch nach → kein Block.
+3. SDK `clearState` bei jedem `token_*` bricht theoretisch den Grace-Vertrag, falls der
+   Server einen rotierten kid nicht mehr liefert — **prod-entschärft** (rotierte Keys werden
+   nie gelöscht). PLAUSIBLE.
+4. Login-`||`: per-Email-Token wird vor dem IP-Gate verbraucht → milde Lockout-Amplifikation
+   (durch IP-Gate auf 20/min gedeckelt).
+5. Neue Per-IP-Limiter fallen bei `TRUST_PROXY_HEADERS=false` in EINEN `no-ip`-Sammelbucket
+   — **prod-entschärft** (`deploy/.env.prod.example` = `true`, echtes XFF-Keying); betrifft nur
+   den Dev-Default. Konsistent mit dem bestehenden activate/recheck-Verhalten.
+6. `evictIdle()` ist O(n) auf dem Hot-Path; bei ≥50k aktiv gehaltenen Keys räumt der Sweep
+   nichts frei und kostet pro Request O(n) (CPU-Amplifikation, sehr hohe Schwelle).
+
+**Härtungs-Pass (Jan: „Option A" — vor Deploy):** Die 4 Rate-Limit-Minors (#1/#4/#5/#6)
+gehärtet — Login-Gates neu geordnet (Backoff read-only zuerst, dann Per-IP, dann Per-Email;
+kein Token-Burn vor dem Backoff-Check), Per-IP-Gates (Login/forgot/discovery) überspringen
+den `no-ip`-Sammelbucket wenn kein echtes IP vorliegt, `loginIpLimiter` 20→50/min
+(büro-NAT-freundlich), evictIdle-Sweep gedrosselt (≤1×/fullRefillMs, gegen O(n)-pro-Request).
+#2 (Un-Expire-Seats) + #3 (SDK clearState) bewusst belassen (by-design/getestet bzw.
+prod-entschärft). **Fokussierter Härtungs-Audit (2 Agenten, Code/Logik + Security):** Security
+grün; Code-Audit fand **1 major** — der gedrosselte Sweep deckelte die Bucket-Map nicht *hart*
+(Dauerflut mit je frischem Key wächst zwischen Sweeps). **Gefixt:** harte Obergrenze in
+`maybeEvict` (FIFO-Evict ältester Einträge bei `maxKeys`) + Regressionstest, der die
+Speichergrenze beweist. typecheck/lint/**169 Unit + 44 Integration**/Build erneut grün.
+**Follow-up (Infra, kein Code-Blocker):** verifizieren, dass NGX Proxy Manager `X-Forwarded-For`
+des Clients **überschreibt** (nicht anhängt) — sonst bleibt das Per-IP-Gate via XFF-Spoofing
+umgehbar (vorbestehend, betrifft auch activate/recheck).
+
+**Kein Schema-Change → keine Migration. Deploy:** _(Deploy + Smoke-Test, Verdikt unten ergänzt)_
+
+**Zurückgestellt (#15, minor):** E-Mail-basierte idempotente Verknüpfung eines
+bestehenden Kunden mit einer PSP-`externalRef` (TOCTOU/E-Mail-UNIQUE-Kollision).
+Blast-Radius heute null (kein PSP-Sync aktiv), als Hinweis in INTEGRATION.md §8
+dokumentiert; beim Bau des Sync-Moduls als E-Mail-Upsert nachzuziehen.
+
+---
+
 ## 2026-05-29 — Payment-Vorbereitung (PSP-agnostisch, v1.4.0)
 
 PSP-Anbindung als Engine-Basis vorbereitet, BEVOR das erste Produkt lizenziert wird. Ein Recherche-Sub-Chat lieferte eine PSP-Empfehlung (Merchant of Record; Polar/Paddle gleichauf, Endwahl offen — der „Early Member"-Preisvorteil von Polar war zum 27.05. ausgelaufen). Als License-Engine-Architekt die Sub-Chat-Liste gefiltert: das meiste war Sync-Modul/Account-Setup, die echte Engine-Vorarbeit ist klein + PSP-agnostisch. Umgesetzt (Commit `451afb9` + Audit-Fixes):

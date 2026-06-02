@@ -1,6 +1,6 @@
 import { LicenseStatus, type AuditLog } from '@prisma/client';
 import { prisma } from '../prisma';
-import { getSeatUsage } from '../binding/activation-service';
+import { getSeatUsageForLicenses } from '../binding/activation-service';
 import { parseBindingPolicy } from '../binding/binding-policy';
 import { AuditEventType } from '../audit';
 import type { SeatInfo } from '@license-engine/shared-types';
@@ -176,16 +176,19 @@ export async function getActiveLicensesOverview(): Promise<ActiveLicenseOverview
   const rejectByLicense = new Map(
     rejectGroups.map((g) => [g.targetId, g._count._all] as const),
   );
-  return Promise.all(
-    licenses.map(async (l) => ({
-      id: l.id,
-      licenseKey: l.licenseKey,
-      customerName: l.customer.name,
-      productName: l.product.name,
-      seats: await getSeatUsage(l.id, parseBindingPolicy(l.bindingPolicy)),
-      rejectedCount: rejectByLicense.get(l.id) ?? 0,
-    })),
+  // One grouped query for all seat counts instead of one getSeatUsage (= one
+  // COUNT per binding type) per license.
+  const seatsByLicense = await getSeatUsageForLicenses(
+    licenses.map((l) => ({ id: l.id, policy: parseBindingPolicy(l.bindingPolicy) })),
   );
+  return licenses.map((l) => ({
+    id: l.id,
+    licenseKey: l.licenseKey,
+    customerName: l.customer.name,
+    productName: l.product.name,
+    seats: seatsByLicense.get(l.id) ?? [],
+    rejectedCount: rejectByLicense.get(l.id) ?? 0,
+  }));
 }
 
 /** Headline counts for the dashboard metric tiles. */

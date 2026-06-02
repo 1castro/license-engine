@@ -3,6 +3,7 @@
  * and a `createNodeLicenseClient` convenience that wires both together.
  */
 import { randomUUID } from 'node:crypto';
+import { hostname as osHostname } from 'node:os';
 import { createLicenseClient, type LicenseClient } from './client';
 import { createFileSystemStorage } from './storage/filesystem';
 import { createMemoryStorage } from './storage/memory';
@@ -35,11 +36,14 @@ export async function createNodeLicenseClient(options: NodeClientOptions): Promi
   const storage =
     options.storage ?? createFileSystemStorage({ productSlug: options.productSlug });
   const installationId = await getOrCreateInstallationId(storage);
+  // Static ESM import (this module is Node-only anyway). The previous lazy
+  // `require('node:os')` threw "require is not defined" under a pure-ESM build,
+  // which the catch silently swallowed → every Node activation reported
+  // "unknown-host". Keep the try/catch only for the (rare) sandbox where
+  // os.hostname() itself is denied.
   const hostname = (() => {
     try {
-      // Lazy require so the import is only paid in Node.
-
-      return require('node:os').hostname() as string;
+      return osHostname();
     } catch {
       return 'unknown-host';
     }

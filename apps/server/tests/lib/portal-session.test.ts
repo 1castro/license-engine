@@ -11,9 +11,9 @@ beforeAll(() => {
 
 describe('portal session JWT', () => {
   it('roundtrips a session through sign + verify', async () => {
-    const { signPortalSession, verifyPortalSession } = await import('../../src/lib/portal/session');
+    const { signPortalSession, verifyPortalSessionSignature } = await import('../../src/lib/portal/session');
     const { token } = await signPortalSession({ customerId: 'c_1', email: 'a@b.test' });
-    const payload = await verifyPortalSession(token);
+    const payload = await verifyPortalSessionSignature(token);
     expect(payload).not.toBeNull();
     if (payload) {
       expect(payload.customerId).toBe('c_1');
@@ -23,7 +23,7 @@ describe('portal session JWT', () => {
   });
 
   it('returns null for a tampered token', async () => {
-    const { signPortalSession, verifyPortalSession } = await import('../../src/lib/portal/session');
+    const { signPortalSession, verifyPortalSessionSignature } = await import('../../src/lib/portal/session');
     const { token } = await signPortalSession({ customerId: 'c_1', email: 'a@b.test' });
     // Tamper inside the payload segment (header.payload.signature). Flipping a
     // payload character deterministically invalidates the signature. Flipping
@@ -33,12 +33,12 @@ describe('portal session JWT', () => {
     const flippedPayload =
       payload.slice(0, -1) + (payload.endsWith('A') ? 'B' : 'A');
     const tampered = `${header}.${flippedPayload}.${signature}`;
-    expect(await verifyPortalSession(tampered)).toBeNull();
+    expect(await verifyPortalSessionSignature(tampered)).toBeNull();
   });
 
   it('returns null for total garbage', async () => {
-    const { verifyPortalSession } = await import('../../src/lib/portal/session');
-    expect(await verifyPortalSession('not.a.jwt')).toBeNull();
-    expect(await verifyPortalSession('')).toBeNull();
+    const { verifyPortalSessionSignature } = await import('../../src/lib/portal/session');
+    expect(await verifyPortalSessionSignature('not.a.jwt')).toBeNull();
+    expect(await verifyPortalSessionSignature('')).toBeNull();
   });
 });

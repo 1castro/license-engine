@@ -68,6 +68,22 @@ export class LicenseTokenInvalidError extends LicenseSdkError {
   }
 }
 
+/**
+ * The SDK is misconfigured or sent a payload the server rejected as malformed
+ * (e.g. the configured `productSlug` does not exist, or a validation error on
+ * the request). This is an integration/developer bug, NOT an end-user license
+ * verdict — surfacing it as LicenseNotActiveError would wrongly block a paying
+ * user because of a configuration mistake. Fix the config; do not retry.
+ */
+export class LicenseConfigError extends LicenseSdkError {
+  constructor(
+    public readonly code: string,
+    message: string,
+  ) {
+    super(`License SDK misconfigured (${code}): ${message}`);
+  }
+}
+
 export class ServerUnreachableError extends LicenseSdkError {
   constructor(
     public readonly reason: string,

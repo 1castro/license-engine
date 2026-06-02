@@ -6,6 +6,7 @@ import { extractIp, hashIp, writeAuditLog, AuditEventType } from '@/lib/audit';
 import { getLogger } from '@/lib/logger';
 import { activateLimiter } from '@/lib/auth/rate-limit';
 import { releaseActivation } from '@/lib/binding/activation-service';
+import { hashBindingValue } from '@/lib/binding/binding-hash';
 import {
   TokenVerificationError,
   verifyLicenseToken,
@@ -77,6 +78,26 @@ async function handleDeactivate(req: Request): Promise<NextResponse> {
     const license = await prisma.license.findUnique({ where: { id: licenseId } });
     if (!license || license.productId !== product.id) {
       return jsonError(404, 'license_not_active', 'License not found for this product');
+    }
+
+    // Ownership check: a valid token only authorises deactivating the bindings
+    // it actually carries. Without this, any client holding a valid token for
+    // the license could release a DIFFERENT seat/device's activation merely by
+    // supplying that binding's value. We compare against the token's own
+    // binding hashes, computed with the SAME hashBindingValue used at
+    // activation (so plaintext-in vs hash-in-token match deterministically).
+    const targetHash = hashBindingValue(parsed.data.bindingType, parsed.data.bindingValue);
+    const ownsBinding =
+      Array.isArray(claims.bindings) &&
+      (claims.bindings as Array<{ type?: unknown; hash?: unknown }>).some(
+        (b) => b?.type === parsed.data.bindingType && b?.hash === targetHash,
+      );
+    if (!ownsBinding) {
+      return jsonError(
+        403,
+        'binding_not_owned',
+        'This token does not carry the binding you are trying to deactivate',
+      );
     }
 
     const result = await releaseActivation(

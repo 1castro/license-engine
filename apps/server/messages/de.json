@@ -73,6 +73,7 @@
     "subtitle": "Produkte mit Feature-Katalog und Lizenz-Defaults",
     "empty": "Noch keine Produkte angelegt.",
     "slug": "Slug",
+    "slugImmutableHint": "Der Slug kann nach dem Anlegen nicht mehr geändert werden — er ist Bestandteil jedes ausgestellten Tokens und der SDK-Konfiguration integrierter Apps.",
     "name": "Name",
     "recheckInterval": "Recheck (h)",
     "jwtLifetime": "JWT-Lifetime (h)",

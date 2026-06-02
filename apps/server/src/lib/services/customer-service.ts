@@ -115,6 +115,22 @@ export async function updateCustomer(
   if (input.externalRef !== undefined) data.externalRef = input.externalRef;
   if (input.externalSource !== undefined) data.externalSource = input.externalSource;
 
+  // An email change moves the account to a new, not-yet-controlled address.
+  // Mirror what setInitialPassword/resetPassword do: drop the verified flag (the
+  // new address is unverified) and bump portalSessionsValidAfter so any session
+  // still carrying the old email claim is invalidated. Only when the address
+  // actually changes — re-saving the same email must not log everyone out.
+  if (input.email !== undefined) {
+    const current = await prisma.customer.findUnique({
+      where: { id },
+      select: { email: true },
+    });
+    if (current && current.email !== input.email) {
+      data.emailVerifiedAt = null;
+      data.portalSessionsValidAfter = new Date();
+    }
+  }
+
   const customer = await prisma.customer.update({ where: { id }, data });
   await writeAuditLog({
     eventType: AuditEventType.CustomerUpdated,

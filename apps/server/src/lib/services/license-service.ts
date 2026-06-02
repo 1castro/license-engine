@@ -247,19 +247,20 @@ export async function updateLicense(
   input: LicenseUpdateInput,
   ctx: AdminAuthContext,
 ): Promise<License> {
+  // Load once: needed for the featureFlags-catalog check AND the un-expire logic.
+  // If the license doesn't exist, the update below raises P2025 → 404 in the route.
+  const current = await prisma.license.findUnique({
+    where: { id },
+    select: { status: true, expiresAt: true, product: { select: { featureCatalog: true } } },
+  });
+
   const data: Prisma.LicenseUpdateInput = {};
   if (input.expiresAt !== undefined) {
     data.expiresAt = input.expiresAt === null ? null : new Date(input.expiresAt);
   }
   if (input.featureFlags !== undefined) {
-    // Enforce featureFlags ⊆ the product's catalog. If the license doesn't
-    // exist, skip — the update below raises P2025 → 404 in the route.
-    const lic = await prisma.license.findUnique({
-      where: { id },
-      select: { product: { select: { featureCatalog: true } } },
-    });
-    if (lic) {
-      assertFeatureFlagsInCatalog(input.featureFlags, lic.product.featureCatalog);
+    if (current) {
+      assertFeatureFlagsInCatalog(input.featureFlags, current.product.featureCatalog);
     }
     data.featureFlags = input.featureFlags as Prisma.InputJsonValue;
   }
@@ -270,6 +271,23 @@ export async function updateLicense(
   if (input.planName !== undefined) data.planName = input.planName;
   if (input.priceDisplay !== undefined) data.priceDisplay = input.priceDisplay;
   if (input.billingInterval !== undefined) data.billingInterval = input.billingInterval;
+
+  // Un-expire: a renewal (expiresAt set into the future, or cleared to perpetual)
+  // of an EXPIRED license must flip it back to active — otherwise the paying
+  // customer stays locked out forever (activate/recheck gate on status before
+  // expiresAt). Only expired→active; a revoked license is NOT auto-reactivated.
+  if (current?.status === LicenseStatus.expired) {
+    const target =
+      input.expiresAt !== undefined
+        ? input.expiresAt === null
+          ? null
+          : new Date(input.expiresAt)
+        : current.expiresAt;
+    const validAgain = target === null || target.getTime() > Date.now();
+    if (validAgain) {
+      data.status = LicenseStatus.active;
+    }
+  }
 
   const license = await prisma.license.update({ where: { id }, data });
   await writeAuditLog({
@@ -322,4 +340,44 @@ export async function revokeLicense(
     ip: ctx.ip,
   });
   return license;
+}
+
+/**
+ * Flips an active, time-elapsed license to `expired` AND releases its active
+ * seats in one transaction — an expired license occupies nothing, exactly like
+ * revoke. Idempotent: only a still-active row flips (returns whether it did), so
+ * the lazy-expire paths (activate/recheck) and the cron can't double-count or
+ * race. Centralised here so all three callers behave identically (previously the
+ * inline flips left seats `active`, diverging seat usage and causing a later
+ * renewal/reactivation to hit max_exceeded against stale rows).
+ */
+export async function expireLicense(
+  licenseId: string,
+  source: 'activate' | 'recheck' | 'cron',
+  ip: string | null,
+): Promise<boolean> {
+  const flipped = await prisma.$transaction(async (tx) => {
+    const res = await tx.license.updateMany({
+      where: { id: licenseId, status: LicenseStatus.active },
+      data: { status: LicenseStatus.expired },
+    });
+    if (res.count !== 1) return false;
+    await tx.activation.updateMany({
+      where: { licenseId, status: ActivationStatus.active },
+      data: { status: ActivationStatus.released, releasedAt: new Date() },
+    });
+    return true;
+  });
+  if (flipped) {
+    await writeAuditLog({
+      eventType: AuditEventType.LicenseExpired,
+      actorType: 'system',
+      actorId: null,
+      targetType: 'License',
+      targetId: licenseId,
+      metadata: { reason: 'expiresAt-elapsed', source },
+      ip,
+    });
+  }
+  return flipped;
 }

@@ -67,6 +67,10 @@ export async function verifyLicenseToken(input: {
       algorithms: [ALGORITHM],
       audience: input.expectedProductSlug,
       ...(input.expectedIssuer ? { issuer: input.expectedIssuer } : {}),
+      // Tolerate small client/server clock skew so a freshly issued token isn't
+      // rejected as not-yet-valid (nbf) or a near-boundary token as expired.
+      // Mirrors the server verifier's tolerance.
+      clockTolerance: '30s',
     });
     return payload as unknown as LicenseTokenClaims;
   } catch (err) {
@@ -76,8 +80,19 @@ export async function verifyLicenseToken(input: {
     if (err instanceof joseErrors.JWTExpired) {
       throw new LicenseTokenInvalidError('expired', err.message);
     }
-    if (err instanceof joseErrors.JWTClaimValidationFailed && err.claim === 'aud') {
-      throw new LicenseTokenInvalidError('audience_mismatch', err.message);
+    if (err instanceof joseErrors.JWTClaimValidationFailed) {
+      // A failed claim check (audience, not-before, issuer …) is NOT a tampered
+      // signature — jose already verified the signature before reaching claim
+      // validation. Reporting it as `signature_invalid` would mislead callers
+      // into suspecting a forged token / wrong key. Map the common claims to
+      // their own codes; the rest stay as a generic claim failure.
+      if (err.claim === 'aud') {
+        throw new LicenseTokenInvalidError('audience_mismatch', err.message);
+      }
+      if (err.claim === 'nbf' || err.claim === 'iat') {
+        throw new LicenseTokenInvalidError('not_yet_valid', err.message);
+      }
+      throw new LicenseTokenInvalidError('claim_invalid', err.message);
     }
     const message = err instanceof Error ? err.message : 'unknown';
     throw new LicenseTokenInvalidError('signature_invalid', message);

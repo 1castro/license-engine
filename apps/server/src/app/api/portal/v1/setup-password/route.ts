@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { extractIp, hashIp } from '@/lib/audit';
+import { getLogger } from '@/lib/logger';
 import { portalPasswordLimiter } from '@/lib/auth/rate-limit';
 import {
   PortalAuthError,
@@ -15,6 +16,17 @@ function jsonError(status: number, code: string, message: string) {
 }
 
 export async function POST(req: Request) {
+  try {
+    return await handleSetupPassword(req);
+  } catch (err) {
+    // Uniform JSON 500 so a DB/infra failure never surfaces as raw Next.js HTML
+    // that a JSON-only client can't parse. PortalAuthError is handled inside.
+    getLogger().error({ event: 'portal.setup_password.internal_error', err }, 'Setup-password failed');
+    return jsonError(500, 'internal_error', 'Internal server error');
+  }
+}
+
+async function handleSetupPassword(req: Request): Promise<NextResponse> {
   const ipHashForLimit = hashIp(extractIp(req)) ?? 'no-ip';
   if (!portalPasswordLimiter.tryConsume(ipHashForLimit)) {
     return jsonError(429, 'rate_limited', 'Zu viele Versuche, bitte kurz warten');

@@ -31,7 +31,12 @@ export const productCreateSchema = z.object({
   licenseKeyPrefix: z.string().min(1).max(16).default('TROP'),
 });
 
-export const productUpdateSchema = productCreateSchema.partial();
+// The slug is IMMUTABLE after creation: it is the JWT `aud` claim of every
+// issued token and is baked into each integrating app's SDK config
+// (expectedProductSlug). Renaming it would break recheck (audience_mismatch)
+// for all existing activations and lock those apps out permanently. So it is
+// omitted from the update schema entirely — a sent `slug` is silently stripped.
+export const productUpdateSchema = productCreateSchema.omit({ slug: true }).partial();
 
 export type ProductCreateInput = z.infer<typeof productCreateSchema>;
 export type ProductUpdateInput = z.infer<typeof productUpdateSchema>;
@@ -105,8 +110,8 @@ export async function updateProduct(
   input: ProductUpdateInput,
   ctx: AdminAuthContext,
 ): Promise<Product> {
+  // slug intentionally NOT updatable — see productUpdateSchema.
   const data: Prisma.ProductUpdateInput = {};
-  if (input.slug !== undefined) data.slug = input.slug;
   if (input.name !== undefined) data.name = input.name;
   if (input.featureCatalog !== undefined) data.featureCatalog = input.featureCatalog;
   if (input.revocationStrategy !== undefined) data.revocationStrategy = input.revocationStrategy;

@@ -41,8 +41,21 @@ export interface LoginBackoff {
   recordSuccess(identifier: string): void;
 }
 
+const MAX_DELAY_MS = DELAYS_MS[DELAYS_MS.length - 1]!; // 300s, the capped backoff
+const BACKOFF_MAX_KEYS = 50_000;
+
 export function createInMemoryLoginBackoff(): LoginBackoff {
   const state = new Map<string, BackoffState>();
+
+  // Bounds memory: recordFailure is the only growth path (an entry lives until
+  // a successful login clears it). Sweep entries whose backoff window elapsed
+  // more than a full MAX_DELAY ago — at that point the attacker stopped trying
+  // and a future attempt restarts from scratch anyway, so forgetting is safe.
+  function evictStale(now: number) {
+    for (const [id, s] of state) {
+      if (now - s.nextAttemptAt >= MAX_DELAY_MS) state.delete(id);
+    }
+  }
 
   return {
     check(identifier: string): number | null {
@@ -53,11 +66,13 @@ export function createInMemoryLoginBackoff(): LoginBackoff {
       return s.nextAttemptAt - now;
     },
     recordFailure(identifier: string): void {
+      const now = Date.now();
+      if (state.size >= BACKOFF_MAX_KEYS) evictStale(now);
       const existing = state.get(identifier);
       const failures = (existing?.consecutiveFailures ?? 0) + 1;
       state.set(identifier, {
         consecutiveFailures: failures,
-        nextAttemptAt: Date.now() + delayFor(failures),
+        nextAttemptAt: now + delayFor(failures),
       });
     },
     recordSuccess(identifier: string): void {

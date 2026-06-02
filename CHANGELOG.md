@@ -7,6 +7,84 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [1.5.0] - 2026-06-02 — Voll-Audit-Härtung vor erster Lizenzierung
+
+Kompletter Workflow-Audit über die gesamte Engine (Code/Logik/Security, Recall-Modus)
+**vor der ersten echten Lizenzierung**. 24 von 25 Findings behoben (1 Blocker, 8 Major,
+15 Minor); #15 bewusst zurückgestellt. In drei verifizierten Batches umgesetzt, dann
+gebündelt.
+
+### Behoben (Korrektheit)
+- **Blocker — Verlängerung einer abgelaufenen Lizenz war wirkungslos** (#1): `updateLicense`
+  setzt eine `expired`-Lizenz bei Verlängerung (Zukunfts-`expiresAt` oder perpetual) wieder
+  auf `active`. Vorher blieb der zahlende Kunde nach Renew dauerhaft gesperrt (activate/recheck
+  prüfen `status` vor `expiresAt`). Nur expired→active, niemals revoked.
+- **Lazy-Expire gab Seats nicht frei** (N1): neue zentrale `expireLicense()` released aktive
+  Activations in einer Transaktion (analog `revokeLicense`), idempotent + Audit; genutzt von
+  activate, recheck und dem Expire-Cron. Vorher zählten abgelaufene Lizenzen ihre Plätze
+  dauerhaft als belegt → spätere Reaktivierung lief gegen das Quota-Limit.
+- **Uhren-Skew verwarf frische Tokens** (N6): `clockTolerance` (30s) in Server- **und**
+  SDK-Verifier. Ein Client mit leicht nachgehender Uhr lehnte sein gerade erhaltenes,
+  gültig signiertes JWT nicht mehr ab.
+- **deactivate ohne Binding-Ownership-Prüfung** (#10/N5): deactivate gibt nur noch Bindings
+  frei, die das vorgelegte Token tatsächlich trägt (Abgleich gegen `claims.bindings` über
+  dieselbe `hashBindingValue`-Funktion). Vorher konnte jeder gültige Token einer Lizenz einen
+  fremden Seat derselben Lizenz freigeben.
+
+### Geändert
+- **Produkt-Slug ist nach Erstellung immutable** (N4): der Slug ist die JWT-Audience + Teil
+  der SDK-Konfiguration jeder integrierten App; eine Änderung hätte alle ausgestellten Tokens
+  schlagartig invalidiert. Aus dem Update-Schema entfernt, im Produkt-Formular im Edit-Modus
+  gesperrt (mit Hinweis), nur beim Anlegen setzbar.
+- **SDK-Fehlerklassifikation** (#2/#8/N7): 5xx und 429 beim recheck werden wie Server-
+  Unerreichbarkeit behandelt → `ServerUnreachableError` mit Grace (der Cache-Token bleibt im
+  exp-Fenster gültig) statt harter Aussperrung bei einem transienten Hiccup;
+  `unknown_product`/`validation_error`/`invalid_json` → neue `LicenseConfigError`
+  (Integrations-/Konfig-Fehler, kein Lizenz-Verdikt); nbf/iat-Claim-Fehler → eigener Code
+  `not_yet_valid` statt irreführend `signature_invalid`.
+- **SDK-Selbstheilung** (#9/N8): `performRecheck` verwirft den lokalen Cache bei hart
+  abweisbaren `token_*`-Fehlern (z.B. nach Key-Rotation); ein korruptes `lastRecheckAt` (NaN)
+  erzwingt einen Recheck, statt ihn stumm dauerhaft zu unterdrücken.
+- **Dashboard-Performance** (#11): Seat-Auslastung der Aktiv-Lizenz-Übersicht über **einen**
+  `groupBy` statt einer COUNT-Query pro Lizenz/Bindungstyp (~100 → 1 bei 50 Lizenzen).
+- **`features`-Claim defensiv** (N9): das SDK coerct `claims.features` zu `string[]` — ein
+  Token ohne/mit fehlerhaftem Claim liefert `[]` statt die integrierende App bei `.includes()`
+  abstürzen zu lassen.
+
+### Sicherheit
+- **Reset-Mail-Schranke IP-unabhängig** (#3): das Pro-E-Mail-Limit (Mail-Bomb-Schutz) greift
+  jetzt unabhängig von der Quell-IP; zusätzlich ein separates, großzügigeres Pro-IP-Limit.
+  Vorher ließ sich die Schranke per IP-Rotation aushebeln (Postfach-Flutung).
+- **Portal-Login Pro-IP-Gate** (N2): zusätzlich zum Pro-E-Mail-Limit, gegen verteiltes
+  Credential-Spraying über viele Adressen.
+- **Rate-Limiter-/Backoff-Speicher begrenzt** (N10): Eviction voll-aufgefüllter Idle-Buckets
+  gegen unbegrenztes Map-Wachstum (gespoofte `X-Forwarded-For` → OOM).
+- **public-keys-Endpoint** (#12): Rate-Limit + einheitliche JSON-500-Hülle, konsistent zu
+  activate/recheck/deactivate.
+- **Portal-Routen 500-Hülle** (#13): Top-Level try/catch um login/forgot-password/setup/reset
+  → einheitlicher JSON-Fehler statt rohem Next.js-HTML im Infra-Fehlerfall.
+- **Portal-Session-Footgun entschärft** (#14): `verifyPortalSession` → `verifyPortalSessionSignature`
+  umbenannt (reine Krypto, kein State-Anker); `getPortalSession` bleibt der einzige Einstieg
+  mit `portalSessionsValidAfter`- + Customer-Existenz-Prüfung.
+- **E-Mail-Wechsel-Hygiene** (N3): das Ändern der Kunden-E-Mail setzt `emailVerifiedAt` zurück
+  und invalidiert bestehende Portal-Sessions (analog Passwort-Reset).
+- **node:os-ESM-Fix** (#4): Hostname-Erfassung im Node-SDK über statischen `import` — vorher
+  `require('node:os')` → im ESM-Build immer „unknown-host".
+
+### Tests
+- **Test-Netz erweitert** (#5/#6/#7): +23 Integrationstests (recheck-Lifecycle inkl.
+  Un-Expire + Seat-Release, deactivate inkl. Ownership + Quota-Concurrency, `authenticateApiKey`,
+  `getPortalSession`-State-Anker, public-keys), +13 Unit/SDK-Tests (SDK-Grace-Statemachine,
+  clockTolerance/nbf, Rate-Limit-Eviction, Produkt-Slug-Schema). Gesamt **168 Unit + 44
+  Integration**, alle grün.
+
+### Offen
+- **#15** (E-Mail-basierte idempotente Verknüpfung eines bestehenden Kunden mit einer PSP-
+  `externalRef`): zurückgestellt bis zum Bau des Sync-Moduls. Blast-Radius heute null (kein
+  PSP-Sync aktiv); als Hinweis in [INTEGRATION.md](./docs/INTEGRATION.md) dokumentiert.
+
+---
+
 ## [1.4.0] - 2026-05-29 — Payment-Vorbereitung (PSP-agnostisch)
 
 Engine-Basis für die spätere Anbindung eines Zahlungsdienstleisters (Merchant of

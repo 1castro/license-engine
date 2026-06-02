@@ -106,7 +106,9 @@ export function ProductForm(props: CreateProps | EditProps) {
       .filter((line) => line.length > 0);
 
     const payload = {
-      slug: values.slug,
+      // slug is immutable after creation (it is the token audience + baked into
+      // each app's SDK config) — only send it on create.
+      ...(props.mode === 'create' ? { slug: values.slug } : {}),
       name: values.name,
       recheckIntervalHours: values.recheckIntervalHours,
       jwtLifetimeHours: values.jwtLifetimeHours,
@@ -156,8 +158,12 @@ export function ProductForm(props: CreateProps | EditProps) {
                     {...field}
                     placeholder="my-product"
                     autoComplete="off"
+                    disabled={props.mode === 'edit'}
                   />
                 </FormControl>
+                {props.mode === 'edit' && (
+                  <FormDescription>{t('slugImmutableHint')}</FormDescription>
+                )}
                 <FormMessage />
               </FormItem>
             )}

@@ -225,29 +225,68 @@ export async function releaseActivation(
 // re-exported here so existing imports from this module keep working.
 export type { SeatInfo };
 
-/**
- * Counts active activations per binding type that the policy actually governs
- * (those listed in `required` or `maxPerType`). Lets an integrating app show
- * "37 of 100 seats used". One COUNT per relevant type — typically 1–2 types.
- */
-export async function getSeatUsage(
-  licenseId: string,
-  policy: BindingPolicy,
-): Promise<SeatInfo[]> {
-  const types = [
+/** The binding types a policy actually governs (listed in `required` or `maxPerType`). */
+function regulatedTypes(policy: BindingPolicy): BindingType[] {
+  return [
     ...new Set<BindingType>([
       ...(policy.required ?? []),
       ...(Object.keys(policy.maxPerType ?? {}) as BindingType[]),
     ]),
   ];
+}
+
+/**
+ * Counts active activations per binding type that the policy actually governs.
+ * Lets an integrating app show "37 of 100 seats used". One COUNT per relevant
+ * type — typically 1–2 types.
+ */
+export async function getSeatUsage(
+  licenseId: string,
+  policy: BindingPolicy,
+): Promise<SeatInfo[]> {
   return Promise.all(
-    types.map(async (type) => {
+    regulatedTypes(policy).map(async (type) => {
       const used = await prisma.activation.count({
         where: { licenseId, bindingType: type, status: ActivationStatus.active },
       });
       return { type, used, max: maxActivationsFor(policy, type) };
     }),
   );
+}
+
+/**
+ * Batch variant of getSeatUsage for list views (e.g. the admin dashboard).
+ * Issues ONE grouped query across all given licenses instead of one COUNT per
+ * (license, type) — avoids an N+1 fan-out (~100 round-trips for 50 licenses ×
+ * 2 types). Returns licenseId → SeatInfo[], covering only each policy's
+ * regulated types.
+ */
+export async function getSeatUsageForLicenses(
+  licenses: Array<{ id: string; policy: BindingPolicy }>,
+): Promise<Map<string, SeatInfo[]>> {
+  const ids = licenses.map((l) => l.id);
+  const groups = ids.length
+    ? await prisma.activation.groupBy({
+        by: ['licenseId', 'bindingType'],
+        where: { licenseId: { in: ids }, status: ActivationStatus.active },
+        _count: { _all: true },
+      })
+    : [];
+  const used = new Map<string, number>();
+  for (const g of groups) used.set(`${g.licenseId}|${g.bindingType}`, g._count._all);
+
+  const result = new Map<string, SeatInfo[]>();
+  for (const { id, policy } of licenses) {
+    result.set(
+      id,
+      regulatedTypes(policy).map((type) => ({
+        type,
+        used: used.get(`${id}|${type}`) ?? 0,
+        max: maxActivationsFor(policy, type),
+      })),
+    );
+  }
+  return result;
 }
 
 // -----------------------------------------------------------------------------
