@@ -15,20 +15,24 @@ an einer Stelle bündeln. Payment/Billing ist bewusst **kein** Teil (siehe CLAUD
 
 ## Aktueller Stand
 
-**LIVE in Produktion (v1.4.0)** auf `188.245.95.60`, erreichbar unter
+**LIVE in Produktion (v1.5.0)** auf `188.245.95.60`, erreichbar unter
 **https://license.tropicsoft.de**. Phasen 1–7 + Voll-Audit-Härtung + Fehlversuch-Protokoll,
 Integrationstests, Audit-Log-Retention, shared-types-Zentralisierung und PSP-agnostische
 Payment-Vorbereitung — alles live.
 
-**v1.5.0 — Voll-Audit-Härtung (implementiert + verifiziert, Deploy ausstehend):** Kompletter
+**v1.5.0 — Voll-Audit-Härtung vor erster Lizenzierung (live, Commit `26d7c65`):** Kompletter
 Workflow-Audit (Code/Logik/Security) über die gesamte Engine **vor der ersten echten
 Lizenzierung**. 24 von 25 Findings behoben (1 Blocker, 8 Major, 15 Minor; #15 zurückgestellt
 bis Sync-Modul). Kern: Un-Expire-Blocker (Renew einer abgelaufenen Lizenz wirkt wieder),
 Seat-Freigabe bei Expire, deactivate-Binding-Ownership, Slug-Immutabilität, clockTolerance,
-IP-unabhängige Mail-Bomb-Schranke, begrenzter Rate-Limiter-Speicher, einheitliche
-JSON-Fehlerhüllen. Test-Netz von 21 auf **44 Integrations- + 168 Unit-Tests** erweitert.
-typecheck/lint/Build grün. Re-Audit + Deploy abschließend (Details: CHANGELOG v1.5.0,
-LOGBUCH 2026-06-02). **Nach Deploy auf „LIVE (v1.5.0)" hochziehen.**
+IP-unabhängige Mail-Bomb-Schranke, hart begrenzter Rate-Limiter-Speicher, einheitliche
+JSON-Fehlerhüllen. Test-Netz von 21 auf **44 Integrations- + 169 Unit-Tests** erweitert.
+Re-Audit (Workflow) GO + Härtungs-Pass; deployt, Smoke-Test grün. Details: CHANGELOG v1.5.0,
+LOGBUCH 2026-06-02.
+
+**Offener Infra-Follow-up:** verifizieren, dass NGX Proxy Manager das Client-`X-Forwarded-For`
+**überschreibt** (nicht anhängt) — sonst bleiben die Per-IP-Rate-Limits via XFF-Spoofing
+umgehbar (vorbestehend; Memory ist durch die harte Map-Obergrenze ohnehin gedeckelt).
 
 **Payment-Status:** Vorbereitung steht (Display-Metadaten an der Lizenz, `polar`-Quelle,
 externalRef-Lookup für idempotente Verlängerung). **Keine Payment-Logik** — die kommt
@@ -93,7 +97,7 @@ Detail-Verifikation je Phase steht im git-Verlauf + [LOGBUCH.md](./LOGBUCH.md).
 | — | v1.2.0 Voll-Audit-Härtung (Multi-Tenant, Quota, Portal-Session) | done |
 | — | Fehlversuch-Protokoll + Integrationstests + Log-Retention (v1.3.0) | done, live |
 | — | PSP-agnostische Payment-Vorbereitung (v1.4.0) | done, live |
-| — | Voll-Audit-Härtung vor erster Lizenzierung (v1.5.0, 24/25 Findings) | done, Deploy ausstehend |
+| — | Voll-Audit-Härtung vor erster Lizenzierung (v1.5.0, 24/25 Findings) | done, live |
 
 ---
 

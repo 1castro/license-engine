@@ -84,7 +84,10 @@ Speichergrenze beweist. typecheck/lint/**169 Unit + 44 Integration**/Build erneu
 des Clients **überschreibt** (nicht anhängt) — sonst bleibt das Per-IP-Gate via XFF-Spoofing
 umgehbar (vorbestehend, betrifft auch activate/recheck).
 
-**Kein Schema-Change → keine Migration. Deploy:** _(Deploy + Smoke-Test, Verdikt unten ergänzt)_
+**Kein Schema-Change → keine Migration. Deployt v1.5.0** (Commit `26d7c65`) auf
+license.tropicsoft.de: Build grün, `prisma migrate deploy` → „No pending migrations",
+Container recreated, `license-engine: healthy`. **Externer Smoke-Test grün:** portal/login 200,
+admin/login 200, public-keys 200 (liefert Key-Chain), admin-API 401, activate(leer) 400.
 
 **Zurückgestellt (#15, minor):** E-Mail-basierte idempotente Verknüpfung eines
 bestehenden Kunden mit einer PSP-`externalRef` (TOCTOU/E-Mail-UNIQUE-Kollision).
