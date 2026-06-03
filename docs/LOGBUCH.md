@@ -4,6 +4,30 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-06-03 — Engine-Setup für die erste Fahrdienst-Integration (Test)
+
+Vorbereitung der ersten realen Lizenzierung (Fahrdienst, Test-first auf
+`tester.fahrdienst.pro`). Produkt-Timing + Test-Kunde + Test-Lizenz per Service-Layer
+angelegt — idempotentes Seed-Script `apps/server/scripts/seed-fahrdienst-test.ts`, ausgeführt
+über den `license-engine-migrate`-Service mit Volume-Mount (kein Rebuild, kein App-Recreate;
+gleiches Muster wie `admin:bootstrap`/`phase3-bootstrap`). Alle Schritte mit Audit-Log
+(actorId `seed:fahrdienst-test`):
+
+- **Produkt `fahrdienst`** (id `cmppfuuh7…`): `recheckIntervalHours=24`, `jwtLifetimeHours=168` (Q6).
+- **Test-Kunde** „Fahrdienst Tester" (`tester@fahrdienst.pro`, id `cmpy859jp…`, externalRef
+  `fahrdienst-test`). Portal-Setup-Mail wurde versandt (für den API-Test irrelevant).
+- **Test-Lizenz** (id `cmpy859mw…`, externalRef `fahrdienst-test-tester`): licenseKey
+  `TR0P-26A1-0TXD-XMWB-FR8T`, status active, expiresAt 2027-06-03,
+  bindingPolicy `{ required:['domain'], maxPerType:{ domain:1, account:2 } }`.
+
+Idempotent (Dedup über externalRef → Re-Run liefert dieselbe Lizenz). **Rollback:** Lizenz +
+Kunde über die externalRefs bzw. im Admin-UI widerrufen/löschen, Produkt-Timing zurückstellen.
+Engine-seitig kein Code-Change am laufenden Dienst. Mandanten-Lizenzen (account unbegrenzt =
+`{ maxPerType:{ domain:1 } }`) folgen erst NACH grünem End-to-End-Test auf dem Tester. Die
+Q1–Q7-Klärung steckt in `docs/INTEGRATION.md` (Fahrdienst-seitig im Audit-Doc).
+
+---
+
 ## 2026-06-02 (Nachtrag) — X-Forwarded-For Anti-Spoofing (v1.5.1)
 
 Den im v1.5.0-Härtungs-Audit gemeldeten XFF-Follow-up am Live-System verifiziert und
