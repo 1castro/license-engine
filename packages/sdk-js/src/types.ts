@@ -58,4 +58,16 @@ export interface ValidatedLicense {
   token: string;
   /** True if we just refreshed the token from the server in this call. */
   refreshedFromServer: boolean;
+  /** Display-only licensee name ("Licensed to …"), if the token carries it. */
+  licensee?: string;
+  /** Display-only plan name, if the token carries it. */
+  plan?: string;
+  /**
+   * Display-only REAL license end, distinct from `expiresAt` (which is the
+   * token's offline-grace boundary). Use this for "Gültig bis …". Undefined for
+   * perpetual licenses (see `perpetual`) or tokens issued before this claim.
+   */
+  licenseExpiresAt?: Date;
+  /** Display-only: true iff the license is perpetual (no end date / "unbegrenzt"). */
+  perpetual?: boolean;
 }

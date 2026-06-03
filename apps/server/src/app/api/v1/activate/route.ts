@@ -129,11 +129,13 @@ async function handleActivate(
   const license:
     | (License & {
         product: { slug: string; jwtLifetimeHours: number; recheckIntervalHours: number } | null;
+        customer: { name: string; company: string | null };
       })
     | null = await prisma.license.findUnique({
     where: { licenseKey: canonicalKey },
     include: {
       product: { select: { slug: true, jwtLifetimeHours: true, recheckIntervalHours: true } },
+      customer: { select: { name: true, company: true } },
     },
   });
 
@@ -193,6 +195,15 @@ async function handleActivate(
     ? (license.featureFlags as unknown[]).filter((v): v is string => typeof v === 'string')
     : [];
 
+  // Display-only "licensed to" data, carried in the token (offline) + echoed in
+  // the response. company wins over name for an authentic B2B "Licensed to".
+  // The REAL license end (licenseExpiresAt / perpetual) is distinct from the
+  // token's exp (the ~7d offline-grace boundary) — the app shows "Gültig bis …".
+  const licensee = license.customer.company ?? license.customer.name;
+  const plan = license.planName ?? undefined;
+  const perpetual = license.expiresAt === null;
+  const licenseExpiresAt = license.expiresAt ? license.expiresAt.toISOString() : undefined;
+
   const signed = await signLicenseToken({
     license: {
       id: license.id,
@@ -205,6 +216,10 @@ async function handleActivate(
       type: a.bindingType,
       hash: a.bindingValueHash,
     })),
+    licensee,
+    plan,
+    licenseExpiresAt,
+    perpetual,
   });
 
   // Audit the activation event at the license level (per-activation audit is
@@ -228,5 +243,9 @@ async function handleActivate(
     expiresAt: signed.expiresAt.toISOString(),
     recheckIntervalHours: license.product.recheckIntervalHours,
     seats,
+    ...(licensee ? { licensee } : {}),
+    ...(plan ? { plan } : {}),
+    ...(licenseExpiresAt ? { licenseExpiresAt } : {}),
+    ...(perpetual ? { perpetual: true } : {}),
   } satisfies ActivateResponse);
 }

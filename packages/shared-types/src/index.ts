@@ -43,6 +43,18 @@ export interface ActivateResponse {
   recheckIntervalHours: number;
   /** Seat usage for the binding types governed by the license policy. */
   seats?: SeatInfo[];
+  /** Display-only: licensee name (company ?? name) for an authentic "licensed to". */
+  licensee?: string;
+  /** Display-only: license plan name, mirrored from the PSP/admin. */
+  plan?: string;
+  /**
+   * Display-only: the REAL license validity end (ISO), distinct from the token's
+   * `exp` (which is only the offline-grace boundary). Present iff the license has
+   * an end date.
+   */
+  licenseExpiresAt?: string;
+  /** Display-only: true iff the license has no end date (perpetual / unbegrenzt). */
+  perpetual?: boolean;
 }
 
 /** Server-side `POST /api/v1/recheck` response. */
@@ -53,6 +65,14 @@ export type RecheckResponse =
       expiresAt: string;
       recheckIntervalHours: number;
       seats?: SeatInfo[];
+      /** Display-only: licensee name (company ?? name). */
+      licensee?: string;
+      /** Display-only: license plan name. */
+      plan?: string;
+      /** Display-only: REAL license end (ISO), distinct from token `exp`. */
+      licenseExpiresAt?: string;
+      /** Display-only: true iff perpetual (no end date). */
+      perpetual?: boolean;
     }
   | { status: 'revoked'; revokedAt: string | null }
   | { status: 'expired' };
@@ -97,4 +117,20 @@ export interface LicenseTokenClaims {
   features: string[];
   /** Bindings the client successfully passed at activation time, hashed. */
   bindings: LicenseTokenBinding[];
+  /**
+   * Display-only licensee name (company ?? name) so an app can render an
+   * authentic "Licensed to …" offline from the verified token. Optional —
+   * older tokens (issued before this claim) won't carry it.
+   */
+  licensee?: string;
+  /** Display-only license plan name (mirrored from the PSP/admin). Optional. */
+  plan?: string;
+  /**
+   * Display-only REAL license validity end (ISO). Distinct from `exp`, which is
+   * only the offline-grace boundary (~7d). Lets an app show "Gültig bis …"
+   * offline. Present iff the license has an end date.
+   */
+  licenseExpiresAt?: string;
+  /** Display-only: true iff the license is perpetual (no end date). */
+  perpetual?: boolean;
 }

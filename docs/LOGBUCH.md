@@ -4,6 +4,34 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-06-03 — Anzeige-Metadaten im Token: licensee / plan / Lizenz-Ende (v1.6.0)
+
+Auf Jans Wunsch: eine integrierte App soll „Licensed to …" und „Gültig bis …"
+**authentisch aus der Lizenz** zeigen können (statt aus lokaler Config). Rein darstellend,
+additiv, backward-kompatibel, kein Schema-Change.
+
+- **Vier neue optionale Claims** im signierten Token **und** in der activate/recheck-Antwort:
+  `licensee` (= `company ?? name`), `plan` (= `planName`), `licenseExpiresAt` (echtes
+  Lizenz-Ende, ISO) und `perpetual` (`true` bei unbefristet). Felder werden nur gesetzt, wenn
+  vorhanden (kein leeres `plan`, kein `licenseExpiresAt` bei perpetual).
+- **Schärfung Lizenz-Ende ≠ Token-`exp`:** `licenseExpiresAt`/`perpetual` ist das echte
+  Lizenz-Ende; das JWT-`exp` bleibt nur die Offline-Grace-Grenze (~7 Tage). Doku (INTEGRATION
+  §2) macht das explizit.
+- **Geändert:** `shared-types` (Claims + ActivateResponse/RecheckResponse), `signLicenseToken`
+  (4 Display-Claims, conditional), activate/recheck-Routen (Customer `company/name` mitladen +
+  Felder durchreichen), SDK (`ValidatedLicense` + defensiver Read: string/Date/bool).
+- **Privacy/Datenminimierung:** nur Name/Plan/Lizenz-Ende, KEINE E-Mail/sonstige PII. Der Name
+  liegt im signierten (nicht verschlüsselten) Token — vertretbar (eigener Name des
+  Lizenznehmers, reine Anzeige). **CLAUDE.md-Payment-/Anzeige-Linie entsprechend ergänzt.**
+- **Tests:** +5 Integration (`licensee.test.ts`: licensee/company-Präzedenz/plan/licenseExpiresAt
+  vs. perpetual, Token-exp ≠ Lizenz-Ende, recheck) + 3 SDK-Unit (ValidatedLicense-Exposition).
+  Gesamt **175 Unit + 49 Integration**, typecheck/lint/Build grün.
+
+Additiv → kann unabhängig vom laufenden Fahrdienst-Test live; der Fahrdienst-Chat nimmt
+„Licensed to"/„Gültig bis" einfach mit, sobald deployt.
+
+---
+
 ## 2026-06-03 — Engine-Setup für die erste Fahrdienst-Integration (Test)
 
 Vorbereitung der ersten realen Lizenzierung (Fahrdienst, Test-first auf

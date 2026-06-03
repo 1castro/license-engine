@@ -100,7 +100,12 @@ async function handleRecheck(req: Request): Promise<NextResponse> {
     return jsonError(401, 'token_malformed', 'Token missing subject');
   }
 
-  const license: License | null = await prisma.license.findUnique({ where: { id: licenseId } });
+  const license:
+    | (License & { customer: { name: string; company: string | null } })
+    | null = await prisma.license.findUnique({
+    where: { id: licenseId },
+    include: { customer: { select: { name: true, company: true } } },
+  });
   if (!license || license.productId !== product.id) {
     return jsonError(404, 'license_not_active', 'License not found for this product');
   }
@@ -192,6 +197,15 @@ async function handleRecheck(req: Request): Promise<NextResponse> {
     );
   }
 
+  // Display-only "licensed to" data (offline-readable in the token + echoed).
+  // Re-issued every recheck, so a customer rename / renewal propagates within
+  // the interval. licenseExpiresAt/perpetual = REAL license end, distinct from
+  // the token's exp (offline-grace).
+  const licensee = license.customer.company ?? license.customer.name;
+  const plan = license.planName ?? undefined;
+  const perpetual = license.expiresAt === null;
+  const licenseExpiresAt = license.expiresAt ? license.expiresAt.toISOString() : undefined;
+
   const signed = await signLicenseToken({
     license: {
       id: license.id,
@@ -201,6 +215,10 @@ async function handleRecheck(req: Request): Promise<NextResponse> {
     },
     product: { slug: product.slug, jwtLifetimeHours: product.jwtLifetimeHours },
     bindings: activeBindings.map((b) => ({ type: b.type, hash: b.hash })),
+    licensee,
+    plan,
+    licenseExpiresAt,
+    perpetual,
   });
 
   const seats = await getSeatUsage(license.id, parseBindingPolicy(license.bindingPolicy));
@@ -211,5 +229,9 @@ async function handleRecheck(req: Request): Promise<NextResponse> {
     expiresAt: signed.expiresAt.toISOString(),
     recheckIntervalHours: product.recheckIntervalHours,
     seats,
+    ...(licensee ? { licensee } : {}),
+    ...(plan ? { plan } : {}),
+    ...(licenseExpiresAt ? { licenseExpiresAt } : {}),
+    ...(perpetual ? { perpetual: true } : {}),
   } satisfies RecheckResponse);
 }

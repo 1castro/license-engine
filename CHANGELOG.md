@@ -7,6 +7,35 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [1.6.0] - 2026-06-03 — Anzeige-Metadaten im Token (licensee / plan / Lizenz-Ende)
+
+Damit eine integrierte App „Licensed to …" und „Gültig bis …" **authentisch aus der
+Lizenz** zeigen kann — statt aus lokaler Config. Rein darstellend, additiv,
+backward-kompatibel, kein Schema-Change. Kein Verwaltungs-Panel in der App.
+
+### Hinzugefügt
+- **`licensee`** (= `company ?? name` des Kunden): authentisches „Licensed to …".
+- **`plan`** (= `planName` der Lizenz, sofern gesetzt): Plan-Anzeige.
+- **`licenseExpiresAt`** (echtes Lizenz-Ende, ISO) + **`perpetual`** (`true` bei
+  unbefristet): App zeigt „Gültig bis <Datum>" bzw. „unbegrenzt" — **getrennt vom
+  Token-`exp`**, das nur die Offline-Grace-Grenze (~7 Tage) ist.
+- Alle vier Felder landen sowohl **im signierten JWT** (offline lesbar) als auch
+  **in der activate/recheck-Antwort** (REST-Bequemlichkeit). Beim recheck neu
+  ausgestellt → eine Kunden-Umbenennung/Verlängerung wirkt zum nächsten Recheck.
+- **SDK:** `ValidatedLicense` exponiert `licensee`/`plan`/`licenseExpiresAt`/`perpetual`
+  (defensiv typgeprüft, wie `features`).
+
+### Hinweise
+- **Optional/additiv:** ältere Tokens ohne die Claims funktionieren unverändert;
+  die Felder werden nur gesetzt, wenn vorhanden (kein leeres `plan`, kein
+  `licenseExpiresAt` bei perpetual).
+- **Datenminimiert:** nur Name/Plan/Lizenz-Ende — bewusst KEINE E-Mail/sonstige PII.
+  Konsistent mit der bereits erlaubten Anzeige-Metadaten-Linie (`planName`/`priceDisplay`).
+  Der Name liegt im signierten (nicht verschlüsselten) Token — vertretbar, da es der
+  eigene Name des Lizenznehmers ist und reine Anzeige.
+
+---
+
 ## [1.5.1] - 2026-06-02 — X-Forwarded-For Anti-Spoofing (Per-IP-Rate-Limits)
 
 Nachgelagerter Sicherheits-Fix nach Verifikation der Reverse-Proxy-Konfiguration

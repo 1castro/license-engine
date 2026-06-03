@@ -40,6 +40,14 @@ export interface SignLicenseTokenInput {
     jwtLifetimeHours: number;
   };
   bindings: LicenseTokenBinding[];
+  /** Display-only licensee name (company ?? name); omitted from the token if absent. */
+  licensee?: string | null;
+  /** Display-only plan name; omitted from the token if absent. */
+  plan?: string | null;
+  /** Display-only REAL license end (ISO); omitted if the license is perpetual. */
+  licenseExpiresAt?: string | null;
+  /** Display-only: true iff the license is perpetual (no end date). */
+  perpetual?: boolean;
 }
 
 export interface SignedLicenseToken {
@@ -54,11 +62,19 @@ export async function signLicenseToken(input: SignLicenseTokenInput): Promise<Si
   const now = Math.floor(Date.now() / 1000);
   const exp = now + input.product.jwtLifetimeHours * 3600;
 
-  const token = await new SignJWT({
+  // Display-only claims (licensee/plan) are included only when present, so a
+  // license without a plan — or an older sign path — doesn't carry empty fields.
+  const claims: Record<string, unknown> = {
     licenseKey: input.license.licenseKey,
     features: input.license.featureFlags,
     bindings: input.bindings,
-  })
+  };
+  if (input.licensee) claims.licensee = input.licensee;
+  if (input.plan) claims.plan = input.plan;
+  if (input.licenseExpiresAt) claims.licenseExpiresAt = input.licenseExpiresAt;
+  if (input.perpetual) claims.perpetual = true;
+
+  const token = await new SignJWT(claims)
     .setProtectedHeader({ alg: SIGNING_ALGORITHM, kid, typ: 'JWT' })
     .setIssuer(env.JWT_ISSUER)
     .setAudience(input.product.slug)

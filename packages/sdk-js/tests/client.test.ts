@@ -41,6 +41,10 @@ interface TokenOpts {
   expSeconds?: number; // exp relative to now
   features?: unknown; // allow omitting / non-array for the N9 test
   bindings?: Array<{ type: string; hash: string }>;
+  licensee?: string;
+  plan?: string;
+  licenseExpiresAt?: string;
+  perpetual?: boolean;
 }
 
 async function signServerToken(opts: TokenOpts = {}): Promise<string> {
@@ -48,6 +52,10 @@ async function signServerToken(opts: TokenOpts = {}): Promise<string> {
   const builder = new SignJWT({
     ...(opts.features === undefined ? {} : { features: opts.features }),
     bindings: opts.bindings ?? [],
+    ...(opts.licensee ? { licensee: opts.licensee } : {}),
+    ...(opts.plan ? { plan: opts.plan } : {}),
+    ...(opts.licenseExpiresAt ? { licenseExpiresAt: opts.licenseExpiresAt } : {}),
+    ...(opts.perpetual ? { perpetual: true } : {}),
   })
     .setProtectedHeader({ alg: 'EdDSA', kid: KID, typ: 'JWT' })
     .setIssuer(ISSUER)
@@ -112,6 +120,72 @@ function makeClient(fetchImpl: typeof fetch, storage: StorageAdapter = createMem
     storage,
   };
 }
+
+describe('SDK client — display-only claims (licensed to / license end)', () => {
+  it('exposes licensee, plan and the REAL license end from the token', async () => {
+    const storage = createMemoryStorage();
+    const licenseEnd = new Date(Date.now() + 90 * 24 * 3600_000).toISOString();
+    const { fetchImpl } = makeFetch({
+      activate: async () =>
+        json(200, {
+          token: await signServerToken({
+            features: ['voice'],
+            licensee: 'FidiBus GmbH',
+            plan: 'Pro',
+            licenseExpiresAt: licenseEnd,
+          }),
+          expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+          recheckIntervalHours: 12,
+          seats: [],
+        }),
+    });
+    const { client } = makeClient(fetchImpl, storage);
+    const result = await client.activate({ licenseKey: VALID_KEY });
+    expect(result.licensee).toBe('FidiBus GmbH');
+    expect(result.plan).toBe('Pro');
+    expect(result.licenseExpiresAt?.toISOString()).toBe(licenseEnd);
+    expect(result.perpetual).toBeUndefined();
+    // The token's own grace expiresAt is distinct from the real license end.
+    expect(result.expiresAt.getTime()).toBeLessThan(new Date(licenseEnd).getTime());
+  });
+
+  it('exposes perpetual=true and no licenseExpiresAt for an unlimited license', async () => {
+    const storage = createMemoryStorage();
+    const { fetchImpl } = makeFetch({
+      activate: async () =>
+        json(200, {
+          token: await signServerToken({ features: [], licensee: 'Acme', perpetual: true }),
+          expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+          recheckIntervalHours: 12,
+          seats: [],
+        }),
+    });
+    const { client } = makeClient(fetchImpl, storage);
+    const result = await client.activate({ licenseKey: VALID_KEY });
+    expect(result.licensee).toBe('Acme');
+    expect(result.perpetual).toBe(true);
+    expect(result.licenseExpiresAt).toBeUndefined();
+  });
+
+  it('leaves the fields undefined when the token carries no such claims', async () => {
+    const storage = createMemoryStorage();
+    const { fetchImpl } = makeFetch({
+      activate: async () =>
+        json(200, {
+          token: await signServerToken({ features: [] }),
+          expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+          recheckIntervalHours: 12,
+          seats: [],
+        }),
+    });
+    const { client } = makeClient(fetchImpl, storage);
+    const result = await client.activate({ licenseKey: VALID_KEY });
+    expect(result.licensee).toBeUndefined();
+    expect(result.plan).toBeUndefined();
+    expect(result.licenseExpiresAt).toBeUndefined();
+    expect(result.perpetual).toBeUndefined();
+  });
+});
 
 describe('SDK client — activate + features guard (N9)', () => {
   it('returns features=[] when the token carries no features claim', async () => {

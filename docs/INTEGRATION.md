@@ -76,6 +76,28 @@ mappen — nicht jeden Non-2xx pauschal als „Lizenz weg" werten.
 abweichender Systemuhr nicht fälschlich abgelehnt wird. REST-direkte Apps, die selbst
 verifizieren, sollten dieselbe kleine Toleranz einplanen.
 
+**Anzeige-Metadaten (ab v1.6.0, rein darstellend):** activate/recheck liefern — und der
+signierte Token trägt offline-lesbar — vier optionale Felder für eine authentische
+Lizenz-Anzeige in der App (statt aus lokaler Config):
+
+| Feld | Bedeutung | App zeigt |
+|---|---|---|
+| `licensee` | Kundenname (`company ?? name`) | „Licensed to: FidiBus GmbH" |
+| `plan` | Plan-Name (sofern an der Lizenz gesetzt) | „Plan: Pro" |
+| `licenseExpiresAt` | **echtes** Lizenz-Ende (ISO) | „Gültig bis: 30.09.2027" |
+| `perpetual` | `true` bei unbefristet | „Gültig: unbegrenzt" |
+
+> **Wichtig — Lizenz-Ende ≠ Token-`exp`:** `licenseExpiresAt` ist das echte Ende der
+> Lizenz. Das `exp` im JWT ist NUR die Offline-Grace-Grenze (~7 Tage), nach der ohne
+> erfolgreichen Re-Check hart gesperrt wird. Für „Gültig bis …" IMMER `licenseExpiresAt`
+> (bzw. `perpetual`) verwenden, NIE das Token-`exp`. Bei perpetual ist `licenseExpiresAt`
+> abwesend und `perpetual:true` gesetzt.
+
+Alle vier sind **optional** (ältere Tokens tragen sie evtl. nicht) und **rein darstellend** —
+kein Verwaltungs-Panel in der App. Das SDK exponiert sie auf `ValidatedLicense`
+(`licensee`/`plan`/`licenseExpiresAt: Date`/`perpetual`); REST-direkt liest man sie aus
+der Antwort oder dem dekodierten JWT-Payload.
+
 ---
 
 ## 3. Binding-Modelle

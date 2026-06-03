@@ -63,6 +63,18 @@ function readFeatures(claims: { features?: unknown }): string[] {
     : [];
 }
 
+/** Defensive read of an optional display-only string claim (licensee/plan). */
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/** Defensive read of an optional ISO-date claim (licenseExpiresAt) → Date|undefined. */
+function readOptionalDate(value: unknown): Date | undefined {
+  if (typeof value !== 'string' || value.length === 0) return undefined;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
 export function createLicenseClient(config: LicenseClientConfig): LicenseClient {
   const fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
   const publicKeysRefreshMs = config.publicKeysRefreshMs ?? DEFAULT_PUBLIC_KEYS_REFRESH_MS;
@@ -168,6 +180,10 @@ export function createLicenseClient(config: LicenseClientConfig): LicenseClient 
       licenseKey: canonicalKey,
       productSlug: config.productSlug,
       features: readFeatures(claims),
+      licensee: readOptionalString(claims.licensee),
+      plan: readOptionalString(claims.plan),
+      licenseExpiresAt: readOptionalDate(claims.licenseExpiresAt),
+      perpetual: claims.perpetual === true ? true : undefined,
       expiresAt: new Date(body.expiresAt),
       token: body.token,
       refreshedFromServer: true,
@@ -235,6 +251,10 @@ export function createLicenseClient(config: LicenseClientConfig): LicenseClient 
       licenseKey: next.licenseKey,
       productSlug: next.productSlug,
       features: readFeatures(claims),
+      licensee: readOptionalString(claims.licensee),
+      plan: readOptionalString(claims.plan),
+      licenseExpiresAt: readOptionalDate(claims.licenseExpiresAt),
+      perpetual: claims.perpetual === true ? true : undefined,
       expiresAt: new Date(next.expiresAt),
       token: next.token,
       refreshedFromServer: true,
@@ -296,6 +316,10 @@ export function createLicenseClient(config: LicenseClientConfig): LicenseClient 
       licenseKey: currentState.licenseKey,
       productSlug: currentState.productSlug,
       features: readFeatures(claims),
+      licensee: readOptionalString(claims.licensee),
+      plan: readOptionalString(claims.plan),
+      licenseExpiresAt: readOptionalDate(claims.licenseExpiresAt),
+      perpetual: claims.perpetual === true ? true : undefined,
       expiresAt: new Date(currentState.expiresAt),
       token: currentState.token,
       refreshedFromServer: refreshed && !usedCachedKeys,
