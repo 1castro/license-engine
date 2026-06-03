@@ -33,12 +33,13 @@ const ctx: AdminAuthContext = {
 };
 
 async function main(): Promise<void> {
-  // 1) Produkt-Timing setzen: recheck 24h, exp/Grace 168h (7 Tage).
+  // 1) Produkt-Timing setzen: recheck 1h (Pause/Widerruf greift online ≤1h),
+  //    exp/Grace 168h (7 Tage, Offline-Toleranz unverändert).
   const product = await prisma.product.findUnique({ where: { slug: 'fahrdienst' } });
   if (!product) {
     throw new Error("Produkt 'fahrdienst' nicht gefunden — bitte zuerst anlegen.");
   }
-  await updateProduct(product.id, { recheckIntervalHours: 24, jwtLifetimeHours: 168 }, ctx);
+  await updateProduct(product.id, { recheckIntervalHours: 1, jwtLifetimeHours: 168 }, ctx);
 
   // 2) Test-Kunde (idempotent über externalRef).
   const { customer, created: custCreated } = await createCustomer(

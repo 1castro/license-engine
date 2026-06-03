@@ -4,6 +4,20 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-06-03 — recheckIntervalHours fürs Produkt `fahrdienst` auf 1h
+
+Auf Frage des Fahrdienst-Chats (wie schnell greift Pause/Widerruf in der App): `recheck`
+bestimmt das Eintreten bei erreichbarem Server. War 24h → zu träge für eine „Pause". Auf
+**1h** gesetzt (online ≤1h), `jwtLifetimeHours`/Offline-Grace bleibt 168h/7d unverändert.
+Last vernachlässigbar (interner no-ip-Bucket, 60/min). `revocationStrategy=refresh` ist NICHT
+implementiert (nur Schema) → recheckIntervalHours ist der verfügbare Hebel. Reine
+Produkt-Einstellung über `updateProduct` (Seed-Script `seed-fahrdienst-test.ts`, idempotent,
+über migrate-Image), **kein Deploy/Migration**; greift mit einem Intervall Lag auf laufende
+Clients, frische Aktivierungen sofort. Live verifiziert (activate-Antwort liefert
+`recheckIntervalHours: 1`).
+
+---
+
 ## 2026-06-03 — Lizenz pausieren: reversibler Status `suspended` (v1.7.0)
 
 Auf Jans Wunsch: eine Lizenz **pausieren** (vorübergehend sperren, z. B. zur Klärung mit dem
