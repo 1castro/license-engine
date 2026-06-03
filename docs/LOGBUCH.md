@@ -26,7 +26,15 @@ der Pause **hart gesperrt**.
   Status-Badge „Pausiert". Status-Switches (Label/Variant) erschöpfend erweitert.
 - **CLAUDE.md-Datenmodell** um den `suspended`-Status + Felder ergänzt (Briefing-Änderung).
 - **Tests:** +6 Integration (Plätze-gehalten, 403, recheck suspended, nahtloses Reaktivieren,
-  Transition-Guards) + 2 SDK. typecheck/lint/**177 Unit + 55 Integration**/Build grün.
+  Transition-Guards) + 2 SDK + 1 Retention-Vollständigkeitstest (Audit-Nit).
+  typecheck/lint/**178 Unit + 55 Integration**/Build grün.
+- **Fokussierter Audit (Code/Logik + Security): grün** — kein Blocker/Major. Zwei Nits
+  adressiert: suspend-Route Body-Cap (32 KiB) + Retention-Klassifikations-Vollständigkeitstest.
+- **Deployt v1.7.0** (Commit `23c28b4`): beide Migrationen sauber auf der Live-DB angewandt
+  (`license_status_suspended` + `license_suspend_fields`), `healthy`. **Smoke grün:** portal/
+  admin/pubkeys 200, adminAPI 401, neue Routen suspend/reactivate 401 (live + auth-geschützt),
+  bestehender activate-Flow 200. Suspend selbst NICHT an der Live-Test-Lizenz ausgelöst
+  (Fahrdienst testet aktiv dagegen) — Verhalten ist durch die 6 Integrationstests + Audit gedeckt.
 
 ---
 
