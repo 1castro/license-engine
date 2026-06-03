@@ -27,8 +27,12 @@ additiv, backward-kompatibel, kein Schema-Change.
   vs. perpetual, Token-exp ≠ Lizenz-Ende, recheck) + 3 SDK-Unit (ValidatedLicense-Exposition).
   Gesamt **175 Unit + 49 Integration**, typecheck/lint/Build grün.
 
-Additiv → kann unabhängig vom laufenden Fahrdienst-Test live; der Fahrdienst-Chat nimmt
-„Licensed to"/„Gültig bis" einfach mit, sobald deployt.
+**Deployt v1.6.0** (Commit `fc72ceb`): Build grün, „No pending migrations", `healthy`.
+**Smoke + Live-Feature-Test grün:** activate gegen die Test-Lizenz lieferte `licensee`
+„Fahrdienst Tester" + `licenseExpiresAt` 2027-06-03 (in Response UND Token-Claim), Token-`exp`
+= 2026-06-10 (7-Tage-Grace) **≠** Lizenz-Ende 2027 — sauber getrennt; `deactivate` der
+Smoke-Bindung lieferte `{released:true}` (Test-Lizenz unberührt zurück). Additiv → der
+Fahrdienst-Chat kann „Licensed to"/„Gültig bis" jetzt mitnehmen.
 
 ---
 
