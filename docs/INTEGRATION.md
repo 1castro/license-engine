@@ -62,12 +62,14 @@ jeder Fehler bedeutet „Lizenz ungültig". Die App muss unterscheiden:
 | `5xx` / `429` (rate-limited) | transienter Server-/Drossel-Fehler | **wie Server-Ausfall** → Grace, Cache-Token bis `exp` weiternutzen |
 | `unknown_product` / `validation_error` | **Fehlkonfiguration** der App (falscher `productSlug`, kaputter Payload) | nicht als „Lizenz ungültig" behandeln → Config prüfen, **kein** Sperren des Nutzers |
 | `revoked` / `expired` / `license_not_active` | echtes Lizenz-Verdikt | sperren |
+| recheck `suspended` / activate `license_suspended` | **pausiert** (reversibel) | **sperren + „Lizenz pausiert" zeigen, aber Cache/Token BEHALTEN** und weiter recheck-en → bei Reaktivierung läuft es nahtlos weiter (keine Neu-Aktivierung) |
 | `bindings_released` | der Seat dieses Tokens wurde zentral freigegeben | **neu aktivieren** (nicht als tot behandeln) |
 | `token_*` (z.B. nach Key-Rotation) | Cache-Token unbrauchbar | Cache verwerfen + neu aktivieren |
 
 Das **JS/TS-SDK** macht diese Unterscheidung bereits: 5xx/429 → `ServerUnreachableError`
 (mit Grace-Info), Fehlkonfiguration → `LicenseConfigError`, Verdikt → `LicenseExpiredError`/
-`LicenseRevokedError`, Seat freigegeben → `BindingsReleasedError`. Eine **REST-direkte
+`LicenseRevokedError`, Pause → `LicenseSuspendedError` (Cache bleibt), Seat freigegeben →
+`BindingsReleasedError`. Eine **REST-direkte
 App** (z.B. der Fahrdienst per `curl`) muss diese Fälle selbst anhand des `error.code`
 mappen — nicht jeden Non-2xx pauschal als „Lizenz weg" werten.
 

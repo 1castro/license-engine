@@ -9,6 +9,7 @@ import {
   LicenseInvalidKeyError,
   LicenseNotActiveError,
   LicenseRevokedError,
+  LicenseSuspendedError,
   LicenseTokenInvalidError,
   ServerUnreachableError,
 } from './errors';
@@ -225,6 +226,12 @@ export function createLicenseClient(config: LicenseClientConfig): LicenseClient 
       await clearState();
       throw new LicenseRevokedError(body.revokedAt ? new Date(body.revokedAt) : null);
     }
+    if (body.status === 'suspended') {
+      // Paused server-side. Block now, but KEEP the cache (do NOT clearState):
+      // seats are held, so once reactivated the next recheck returns active and
+      // the client resumes without re-activating.
+      throw new LicenseSuspendedError();
+    }
     if (body.status === 'expired') {
       await clearState();
       throw new LicenseExpiredError(new Date(state.expiresAt));
@@ -386,6 +393,7 @@ async function mapHttpError(res: Response, op: string, graceExpiresAt?: string):
 
   if (code === 'invalid_license_key') throw new LicenseInvalidKeyError(message);
   if (code === 'bindings_released') throw new BindingsReleasedError(message);
+  if (code === 'license_suspended') throw new LicenseSuspendedError(message);
   if (code === 'license_not_active') throw new LicenseNotActiveError(message);
   // Integration/config errors — the SDK is set up wrong or sent a bad payload.
   // Distinct from a license verdict so a misconfiguration doesn't masquerade

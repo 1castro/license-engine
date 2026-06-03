@@ -62,6 +62,11 @@ export const licenseRevokeSchema = z.object({
   reason: z.string().min(1).max(500),
 });
 
+/** Pause: the reason is optional (you may simply park a license while clarifying). */
+export const licenseSuspendSchema = z.object({
+  reason: z.string().min(1).max(500).optional(),
+});
+
 export const licenseListFilterSchema = z.object({
   customerId: cuidString.optional(),
   productId: cuidString.optional(),
@@ -105,6 +110,21 @@ export class LicenseCustomerNotFoundError extends Error {
   constructor(public readonly customerId: string) {
     super(`Customer not found: ${customerId}`);
     this.name = 'LicenseCustomerNotFoundError';
+  }
+}
+
+/**
+ * Raised when a pause/resume is attempted from a state that doesn't allow it
+ * (e.g. suspending a revoked license, or reactivating one that isn't paused).
+ */
+export class LicenseStateTransitionError extends Error {
+  constructor(
+    public readonly licenseId: string,
+    public readonly currentStatus: LicenseStatus,
+    public readonly attempted: 'suspend' | 'reactivate',
+  ) {
+    super(`Cannot ${attempted} license ${licenseId} in status ${currentStatus}`);
+    this.name = 'LicenseStateTransitionError';
   }
 }
 
@@ -337,6 +357,77 @@ export async function revokeLicense(
     targetType: 'License',
     targetId: license.id,
     metadata: { reason },
+    ip: ctx.ip,
+  });
+  return license;
+}
+
+/**
+ * Pauses a license (active → suspended): app access is blocked, but seats are
+ * HELD (activations stay `active`), so a later reactivation resumes seamlessly
+ * without the clients having to re-activate. Distinct from `revoke` (terminal,
+ * releases seats). Only an ACTIVE license can be paused — a revoked/expired one
+ * is resolved differently (revoke is terminal; expiry un-expires via renewal).
+ */
+export async function suspendLicense(
+  id: string,
+  reason: string | undefined,
+  ctx: AdminAuthContext,
+): Promise<License> {
+  const current = await prisma.license.findUnique({ where: { id } });
+  if (!current) {
+    throw new LicenseNotFoundError(id);
+  }
+  if (current.status !== LicenseStatus.active) {
+    throw new LicenseStateTransitionError(id, current.status, 'suspend');
+  }
+
+  // NOTE: seats are intentionally NOT released here (unlike revoke/expire) — the
+  // whole point of pausing is to freeze state for a seamless resume.
+  const license = await prisma.license.update({
+    where: { id },
+    data: {
+      status: LicenseStatus.suspended,
+      suspendedAt: new Date(),
+      suspendReason: reason ?? null,
+    },
+  });
+  await writeAuditLog({
+    eventType: AuditEventType.LicenseSuspended,
+    ...actorOf(ctx),
+    targetType: 'License',
+    targetId: license.id,
+    metadata: { reason: reason ?? null },
+    ip: ctx.ip,
+  });
+  return license;
+}
+
+/**
+ * Resumes a paused license (suspended → active). Held seats are still active, so
+ * clients simply pass their next recheck again — no re-activation needed. Clears
+ * the suspend bookkeeping. A time-elapsed license that was paused will be caught
+ * by the normal lazy-expire on the next activate/recheck.
+ */
+export async function reactivateLicense(id: string, ctx: AdminAuthContext): Promise<License> {
+  const current = await prisma.license.findUnique({ where: { id } });
+  if (!current) {
+    throw new LicenseNotFoundError(id);
+  }
+  if (current.status !== LicenseStatus.suspended) {
+    throw new LicenseStateTransitionError(id, current.status, 'reactivate');
+  }
+
+  const license = await prisma.license.update({
+    where: { id },
+    data: { status: LicenseStatus.active, suspendedAt: null, suspendReason: null },
+  });
+  await writeAuditLog({
+    eventType: AuditEventType.LicenseReactivated,
+    ...actorOf(ctx),
+    targetType: 'License',
+    targetId: license.id,
+    metadata: {},
     ip: ctx.ip,
   });
   return license;

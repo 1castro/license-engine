@@ -29,6 +29,9 @@ export const CRITICAL_EVENTS: readonly string[] = [
   // Expiry, like revocation, is part of the license lifecycle and worth keeping
   // as long as a revocation (audit trail of when access ended).
   AuditEventType.LicenseExpired,
+  // Pause/resume change access — keep the forensic trail of when/why.
+  AuditEventType.LicenseSuspended,
+  AuditEventType.LicenseReactivated,
   AuditEventType.ApiKeyCreated,
   AuditEventType.ApiKeyRevoked,
   AuditEventType.SigningKeyCreated,

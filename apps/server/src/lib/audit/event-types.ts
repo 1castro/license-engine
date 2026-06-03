@@ -26,6 +26,10 @@ export const AuditEventType = {
   LicenseUpdated: 'license.updated',
   LicenseRevoked: 'license.revoked',
   LicenseExpired: 'license.expired',
+  /** Reversible pause (active → suspended). Seats are held. */
+  LicenseSuspended: 'license.suspended',
+  /** Resume from pause (suspended → active). */
+  LicenseReactivated: 'license.reactivated',
 
   // Activation lifecycle
   ActivationCreated: 'activation.created',

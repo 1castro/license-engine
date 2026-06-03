@@ -116,6 +116,12 @@ async function handleRecheck(req: Request): Promise<NextResponse> {
       revokedAt: license.revokedAt?.toISOString() ?? null,
     } satisfies RecheckResponse);
   }
+  if (license.status === LicenseStatus.suspended) {
+    // Paused: block usage now, but DON'T release/clear anything — seats are held
+    // and the same token's bindings stay valid, so a reactivation resumes
+    // seamlessly at the next recheck.
+    return NextResponse.json({ status: 'suspended' } satisfies RecheckResponse);
+  }
   if (license.status === LicenseStatus.expired) {
     return NextResponse.json({ status: 'expired' } satisfies RecheckResponse);
   }

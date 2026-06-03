@@ -75,7 +75,9 @@ export type RecheckResponse =
       perpetual?: boolean;
     }
   | { status: 'revoked'; revokedAt: string | null }
-  | { status: 'expired' };
+  | { status: 'expired' }
+  /** Reversibel pausiert: App muss sperren; seats sind serverseitig gehalten. */
+  | { status: 'suspended' };
 
 /** Single key entry from `GET /api/v1/.well-known/public-keys`. */
 export interface PublicKeyEntry {

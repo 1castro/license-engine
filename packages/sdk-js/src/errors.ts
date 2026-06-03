@@ -56,6 +56,19 @@ export class LicenseExpiredError extends LicenseSdkError {
   }
 }
 
+/**
+ * The license has been PAUSED (suspended) server-side — app access must be
+ * blocked ("Lizenz pausiert"). Unlike revoked/expired this is REVERSIBLE: seats
+ * are held server-side, so the SDK keeps its cached token. Once the license is
+ * reactivated, the next recheck returns active again and the client resumes
+ * without re-activating. Treat as a soft block: show "paused", keep retrying.
+ */
+export class LicenseSuspendedError extends LicenseSdkError {
+  constructor(message = 'License is suspended (paused)') {
+    super(message);
+  }
+}
+
 export class BindingMismatchError extends LicenseSdkError {
   constructor(public readonly detail: string) {
     super(`License binding mismatch: ${detail}`);

@@ -116,7 +116,7 @@ export default async function AdminLicensesPage({
                     <LicenseRowActions
                       licenseId={license.id}
                       licenseKey={license.licenseKey}
-                      isRevoked={license.status === 'revoked'}
+                      status={license.status}
                     />
                   </TableCell>
                 </TableRow>
@@ -143,6 +143,8 @@ function statusLabel(t: LicensesT, status: LicenseStatus): string {
       return t('statusRevoked');
     case 'expired':
       return t('statusExpired');
+    case 'suspended':
+      return t('statusSuspended');
   }
 }
 
@@ -155,6 +157,8 @@ function statusVariant(
     case 'revoked':
       return 'destructive';
     case 'expired':
+      return 'secondary';
+    case 'suspended':
       return 'secondary';
   }
 }

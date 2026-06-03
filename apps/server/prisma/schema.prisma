@@ -45,6 +45,10 @@ enum LicenseStatus {
   active
   revoked
   expired
+  // Reversible "pause": app access is blocked, but seats are HELD (not released)
+  // so reactivation (suspended → active) resumes seamlessly. Distinct from the
+  // terminal `revoked`.
+  suspended
 }
 
 enum BindingType {
@@ -243,6 +247,10 @@ model License {
   status           LicenseStatus @default(active)
   revokedAt        DateTime?
   revocationReason String?
+  /// Set when the license is paused (status=suspended); cleared on reactivation.
+  /// Seats are HELD while suspended — only app access is blocked.
+  suspendedAt   DateTime?
+  suspendReason String?
 
   /// Reference into an external system (e.g. Stripe subscription id) for sync.
   externalRef    String?

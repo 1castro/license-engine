@@ -7,6 +7,37 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [1.7.0] - 2026-06-03 — Lizenz pausieren (suspend / reactivate)
+
+Reversible Pause als erststufiger Lizenz-Status — getrennt vom terminalen `revoked`.
+Erlaubt, eine Lizenz vorübergehend zu sperren (z. B. zur Klärung mit dem Kunden) und
+später **nahtlos** wieder zu aktivieren, ohne neu anzulegen.
+
+### Hinzugefügt
+- **Neuer Status `suspended`** (Pause). **Pausieren** (`active → suspended`): App-Zugriff
+  wird gesperrt, die belegten **Plätze bleiben aber gehalten** (NICHT freigegeben — anders
+  als revoke/expire). **Reaktivieren** (`suspended → active`): die gehaltenen Plätze laufen
+  nahtlos weiter, **keine Neu-Aktivierung** nötig.
+- **App-Verhalten:** `activate` während Pause → **403 `license_suspended`**; `recheck` →
+  **`{ status: 'suspended' }`** → SDK wirft `LicenseSuspendedError` und **behält den Cache**
+  (reversibel). Übergänge sind streng geführt (nur active↔suspended).
+- **Admin-UI:** Aktionen „Pausieren" + „Reaktivieren" (Inline-Modal, kein nativer Dialog) +
+  Status-Badge „Pausiert". **Admin-API:** `POST /api/admin/v1/licenses/{id}/suspend`
+  (Grund optional) + `.../reactivate` (Scope `licenses:write`).
+- **Audit:** `license.suspended` + `license.reactivated` (als kritische/forensische Events
+  klassifiziert, 365 Tage Retention).
+
+### Schema
+- `LicenseStatus += suspended`; `License += suspendedAt`, `suspendReason` — zwei additive
+  Migrationen (Enum-Wert + 2 nullable Spalten), backward-kompatibel.
+
+### Tests
+- +6 Integration (Plätze-gehalten, 403 bei Pause, recheck `suspended`, nahtloses Reaktivieren,
+  Transition-Guards) + 2 SDK-Unit (`LicenseSuspendedError`, Cache bleibt). Gesamt 177 Unit +
+  55 Integration.
+
+---
+
 ## [1.6.0] - 2026-06-03 — Anzeige-Metadaten im Token (licensee / plan / Lizenz-Ende)
 
 Damit eine integrierte App „Licensed to …" und „Gültig bis …" **authentisch aus der

@@ -38,6 +38,7 @@ type RejectReason =
   | 'key_ungültig'
   | 'lizenz_unbekannt'
   | 'lizenz_inaktiv'
+  | 'lizenz_pausiert'
   | 'lizenz_abgelaufen'
   | 'limit_erreicht'
   | 'pflichtbindung_fehlt';
@@ -152,6 +153,12 @@ async function handleActivate(
     return jsonError(404, 'license_not_active', 'License not found, expired or does not belong to this product');
   }
 
+  if (license.status === LicenseStatus.suspended) {
+    // Paused: app access blocked, but seats are held (no release). Distinct code
+    // so the app can show "pausiert" rather than a generic "not active".
+    await auditActivationRejected('lizenz_pausiert', { licenseId: license.id }, ip);
+    return jsonError(403, 'license_suspended', 'License is suspended (paused)');
+  }
   if (license.status !== LicenseStatus.active) {
     await auditActivationRejected('lizenz_inaktiv', { licenseId: license.id }, ip);
     return jsonError(403, 'license_not_active', 'License is not active');

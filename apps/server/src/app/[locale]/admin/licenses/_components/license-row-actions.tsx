@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Ban, MoreHorizontal, Pencil, Users } from 'lucide-react';
+import { Ban, MoreHorizontal, PauseCircle, Pencil, PlayCircle, Users } from 'lucide-react';
+import type { LicenseStatus } from '@prisma/client';
 
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
@@ -14,20 +15,24 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import { RevokeLicenseDialog } from './revoke-license-dialog';
+import { SuspendLicenseDialog } from './suspend-license-dialog';
+import { ReactivateLicenseDialog } from './reactivate-license-dialog';
 
 export function LicenseRowActions({
   licenseId,
   licenseKey,
-  isRevoked,
+  status,
 }: {
   licenseId: string;
   licenseKey: string;
-  isRevoked: boolean;
+  status: LicenseStatus;
 }) {
   const t = useTranslations('common');
   const tLicenses = useTranslations('licenses');
   const tActivations = useTranslations('activations');
-  const [open, setOpen] = useState(false);
+  const [revokeOpen, setRevokeOpen] = useState(false);
+  const [suspendOpen, setSuspendOpen] = useState(false);
+  const [reactivateOpen, setReactivateOpen] = useState(false);
 
   return (
     <>
@@ -50,11 +55,35 @@ export function LicenseRowActions({
               {tActivations('title')}
             </Link>
           </DropdownMenuItem>
+          {/* Pause: only an active license can be paused. Reactivate: only shown
+              when paused. Both reversible; revoke stays the terminal action. */}
+          {status === 'suspended' ? (
+            <DropdownMenuItem
+              onSelect={(event) => {
+                event.preventDefault();
+                setReactivateOpen(true);
+              }}
+            >
+              <PlayCircle className="mr-2 h-4 w-4" />
+              {tLicenses('reactivate')}
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              disabled={status !== 'active'}
+              onSelect={(event) => {
+                event.preventDefault();
+                setSuspendOpen(true);
+              }}
+            >
+              <PauseCircle className="mr-2 h-4 w-4" />
+              {tLicenses('suspend')}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
-            disabled={isRevoked}
+            disabled={status === 'revoked'}
             onSelect={(event) => {
               event.preventDefault();
-              setOpen(true);
+              setRevokeOpen(true);
             }}
             className="text-destructive focus:text-destructive"
           >
@@ -64,8 +93,20 @@ export function LicenseRowActions({
         </DropdownMenuContent>
       </DropdownMenu>
       <RevokeLicenseDialog
-        open={open}
-        onOpenChange={setOpen}
+        open={revokeOpen}
+        onOpenChange={setRevokeOpen}
+        licenseId={licenseId}
+        licenseKey={licenseKey}
+      />
+      <SuspendLicenseDialog
+        open={suspendOpen}
+        onOpenChange={setSuspendOpen}
+        licenseId={licenseId}
+        licenseKey={licenseKey}
+      />
+      <ReactivateLicenseDialog
+        open={reactivateOpen}
+        onOpenChange={setReactivateOpen}
         licenseId={licenseId}
         licenseKey={licenseKey}
       />

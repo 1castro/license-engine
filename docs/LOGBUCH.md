@@ -4,6 +4,32 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-06-03 — Lizenz pausieren: reversibler Status `suspended` (v1.7.0)
+
+Auf Jans Wunsch: eine Lizenz **pausieren** (vorübergehend sperren, z. B. zur Klärung mit dem
+Kunden) und später **nahtlos** reaktivieren — ohne neu anzulegen, getrennt vom terminalen
+`revoked` (das man auch löschen würde). Entscheidung **Option A: Plätze HALTEN**, App während
+der Pause **hart gesperrt**.
+
+- **Schema (Migration auf Live-DB):** `LicenseStatus += suspended` + `License.suspendedAt` /
+  `suspendReason`. Zwei additive Migrationen, sicherheitshalber gesplittet (Enum-Wert zuerst,
+  dann Spalten — PG-Enum-in-Transaktion-Thema), beide am Test-DB sauber angewandt verifiziert.
+- **Service:** `suspendLicense` (active→suspended, Plätze NICHT freigegeben — Kern des
+  Unterschieds zu revoke/expire) + `reactivateLicense` (suspended→active, Bookkeeping
+  geleert). Strenge Guards (`LicenseStateTransitionError`), Audit `license.suspended` /
+  `license.reactivated` (kritisch klassifiziert).
+- **API/App:** activate während Pause → `403 license_suspended`; recheck → `{status:'suspended'}`.
+  SDK: neuer `LicenseSuspendedError`, **Cache wird NICHT verworfen** (reversibel → nahtloses
+  Resume). Admin-API `POST .../suspend` (Grund optional) + `.../reactivate` (Scope
+  `licenses:write`).
+- **Admin-UI:** Aktionen „Pausieren" + „Reaktivieren" (Inline-Modal, kein nativer Dialog) +
+  Status-Badge „Pausiert". Status-Switches (Label/Variant) erschöpfend erweitert.
+- **CLAUDE.md-Datenmodell** um den `suspended`-Status + Felder ergänzt (Briefing-Änderung).
+- **Tests:** +6 Integration (Plätze-gehalten, 403, recheck suspended, nahtloses Reaktivieren,
+  Transition-Guards) + 2 SDK. typecheck/lint/**177 Unit + 55 Integration**/Build grün.
+
+---
+
 ## 2026-06-03 — Anzeige-Metadaten im Token: licensee / plan / Lizenz-Ende (v1.6.0)
 
 Auf Jans Wunsch: eine integrierte App soll „Licensed to …" und „Gültig bis …"

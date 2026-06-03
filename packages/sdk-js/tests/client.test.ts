@@ -7,6 +7,7 @@ import {
   LicenseConfigError,
   LicenseExpiredError,
   LicenseRevokedError,
+  LicenseSuspendedError,
   LicenseTokenInvalidError,
   ServerUnreachableError,
 } from '../src/errors';
@@ -120,6 +121,38 @@ function makeClient(fetchImpl: typeof fetch, storage: StorageAdapter = createMem
     storage,
   };
 }
+
+describe('SDK client — paused license (suspended)', () => {
+  it('throws LicenseSuspendedError on recheck "suspended" and KEEPS the cache', async () => {
+    const storage = createMemoryStorage();
+    const { fetchImpl } = makeFetch({
+      activate: async () =>
+        json(200, {
+          token: await signServerToken({ features: ['voice'] }),
+          expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+          recheckIntervalHours: 0, // force a recheck on validate()
+          seats: [],
+        }),
+      recheck: () => json(200, { status: 'suspended' }),
+    });
+    const { client } = makeClient(fetchImpl, storage);
+    await client.activate({ licenseKey: VALID_KEY });
+    await expect(client.validate()).rejects.toBeInstanceOf(LicenseSuspendedError);
+    // Reversible → cache is NOT cleared (so reactivation resumes without re-activate).
+    expect(await storage.get('license-state.v1')).not.toBeNull();
+  });
+
+  it('throws LicenseSuspendedError when activate returns 403 license_suspended', async () => {
+    const storage = createMemoryStorage();
+    const { fetchImpl } = makeFetch({
+      activate: () => json(403, { error: { code: 'license_suspended', message: 'paused' } }),
+    });
+    const { client } = makeClient(fetchImpl, storage);
+    await expect(client.activate({ licenseKey: VALID_KEY })).rejects.toBeInstanceOf(
+      LicenseSuspendedError,
+    );
+  });
+});
 
 describe('SDK client — display-only claims (licensed to / license end)', () => {
   it('exposes licensee, plan and the REAL license end from the token', async () => {
