@@ -4,6 +4,26 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-06-04 — Produktive Mandanten-Lizenzen angelegt (FidiBus + Berlin Shuttle)
+
+Erste echte Lizenzierung. Zwei **perpetual**-Lizenzen am Produkt `fahrdienst`, per
+Service-Layer (Seed-Script `seed-fahrdienst-mandanten.ts`, idempotent über `externalRef`,
+über migrate-Image, **kein Deploy**). `bindingPolicy { required:['domain'], maxPerType:{ domain:1 } }`
+(account unbegrenzt), `licensee` = Firmenname, Domain wird vom Fahrdienst beim ersten activate gebunden.
+
+- **FidiBus Fahrdienst UG & Co. KG** — Kunde `cmpz48iwo…` (`info@fidibus-bernau.de`), Lizenz
+  `cmpz48izj…`, externalRef `fahrdienst-fidibus`, perpetual, status active.
+- **Berlin Shuttle Zahl GmbH** — Kunde `cmpz48j0d…` (`office@berlin-shuttle.de`), Lizenz
+  `cmpz48j11…`, externalRef `fahrdienst-shuttle`, perpetual, status active.
+
+Die **licenseKeys liegen NICHT im Repo** (bewusst — gehen nur in die jeweilige
+Mandanten-Config, an den Fahrdienst-Chat übergeben). Portal-Setup-Mails an beide Adressen
+versandt (Option A, von Jan freigegeben). Rollback: über die externalRefs bzw. Admin-UI
+(widerrufen/pausieren/löschen). Domains (`fidibus.fahrdienst.pro` / `shuttle.fahrdienst.pro`)
+werden erst beim App-`activate` gebunden — Lizenzen aktuell ohne Aktivierung.
+
+---
+
 ## 2026-06-03 — recheckIntervalHours fürs Produkt `fahrdienst` auf 1h
 
 Auf Frage des Fahrdienst-Chats (wie schnell greift Pause/Widerruf in der App): `recheck`
