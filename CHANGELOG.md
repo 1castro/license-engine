@@ -7,6 +7,23 @@ Versionierung nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ---
 
+## [1.7.1] - 2026-06-04 — Dashboard zeigt unbegrenzte Seats + stabile Reihenfolge
+
+Kleine Verbesserung der Admin-Übersicht (nur Anzeige, kein API-/Schema-Change).
+
+### Geändert
+- Die Seat-Spalte der **Aktiv-Lizenzen-Übersicht** zeigt jetzt auch **unbegrenzte**
+  Bindungstypen, die Aktivierungen haben (z.B. `account` ohne `maxPerType`) — als
+  „Nutzer N/∞" mit Live-Count, statt sie wegzulassen. Vorher sah man bei Mandanten mit
+  unbegrenzten Account-Seats (FidiBus/Shuttle) nur „Domain 1/1".
+- **Stabile Reihenfolge** der Seat-Zeilen (Domain → Nutzer → Geräte → Installationen),
+  unabhängig von der Reihenfolge in der `bindingPolicy`.
+- Betrifft NUR die Dashboard-Übersicht (`getSeatUsageForLicenses`). Der API-Vertrag
+  (`activate`/`recheck` `seats[]`) bleibt policy-reguliert (unverändert) — die
+  Fahrdienst-Integration ist nicht betroffen.
+
+---
+
 ## [1.7.0] - 2026-06-03 — Lizenz pausieren (suspend / reactivate)
 
 Reversible Pause als erststufiger Lizenz-Status — getrennt vom terminalen `revoked`.

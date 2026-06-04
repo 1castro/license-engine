@@ -235,6 +235,18 @@ function regulatedTypes(policy: BindingPolicy): BindingType[] {
   ];
 }
 
+/** Stable display order for seat lines (domain first, then account, …). */
+const SEAT_TYPE_ORDER: BindingType[] = [
+  BindingType.domain,
+  BindingType.account,
+  BindingType.device,
+  BindingType.installation,
+];
+function seatTypeOrder(t: BindingType): number {
+  const i = SEAT_TYPE_ORDER.indexOf(t);
+  return i === -1 ? SEAT_TYPE_ORDER.length : i;
+}
+
 /**
  * Counts active activations per binding type that the policy actually governs.
  * Lets an integrating app show "37 of 100 seats used". One COUNT per relevant
@@ -272,19 +284,29 @@ export async function getSeatUsageForLicenses(
         _count: { _all: true },
       })
     : [];
-  const used = new Map<string, number>();
-  for (const g of groups) used.set(`${g.licenseId}|${g.bindingType}`, g._count._all);
+  // Per-license active count per binding type.
+  const byLicense = new Map<string, Map<BindingType, number>>();
+  for (const g of groups) {
+    let m = byLicense.get(g.licenseId);
+    if (!m) {
+      m = new Map();
+      byLicense.set(g.licenseId, m);
+    }
+    m.set(g.bindingType, g._count._all);
+  }
 
   const result = new Map<string, SeatInfo[]>();
   for (const { id, policy } of licenses) {
-    result.set(
-      id,
-      regulatedTypes(policy).map((type) => ({
-        type,
-        used: used.get(`${id}|${type}`) ?? 0,
-        max: maxActivationsFor(policy, type),
-      })),
-    );
+    const counts = byLicense.get(id) ?? new Map<BindingType, number>();
+    // Show every policy-governed type AND every type that actually has active
+    // activations — so an UNCAPPED type (e.g. `account` with no maxPerType, i.e.
+    // unlimited seats) still surfaces its live count instead of being hidden.
+    // max stays null for uncapped types → the dashboard renders it as "∞".
+    const types = new Set<BindingType>([...regulatedTypes(policy), ...counts.keys()]);
+    const seats = [...types]
+      .sort((a, b) => seatTypeOrder(a) - seatTypeOrder(b))
+      .map((type) => ({ type, used: counts.get(type) ?? 0, max: maxActivationsFor(policy, type) }));
+    result.set(id, seats);
   }
   return result;
 }

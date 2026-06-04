@@ -4,6 +4,22 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-06-04 — Dashboard: unbegrenzte Seats sichtbar + stabile Reihenfolge (v1.7.1)
+
+Beobachtung von Jan: bei FidiBus/Shuttle (account unbegrenzt) zeigte die Aktiv-Lizenzen-
+Übersicht nur „Domain 1/1", obwohl die Nutzer real hochzählten. Ursache (by-design):
+`getSeatUsageForLicenses` listete nur policy-regulierte Typen; ein unbegrenztes `account`
+(kein `maxPerType`) war nicht reguliert → nicht in der Zusammenfassung. **Fix:** die
+Dashboard-Übersicht zeigt jetzt auch Typen mit aktiven Aktivierungen (max:null → UI „∞")
+und sortiert stabil (Domain zuerst). **Nur** `getSeatUsageForLicenses` (Dashboard) geändert;
+die Einzel-`getSeatUsage` (API `seats[]` bei activate/recheck) bleibt policy-reguliert →
+Fahrdienst-Vertrag unberührt. +2 Integrationstests (`dashboard-seats.test.ts`: unbegrenztes
+account mit Live-Count + Domain-zuerst, stabile Reihenfolge bei account-zuerst-Policy).
+typecheck/lint/178 Unit + 57 Integration/Build grün. Audit: Agent rate-limited → Selbst-Review
+am Code (Zählung/Sortierung/API-Vertrag-unverändert/kein N+1/released-Edge/kein Leak) grün.
+
+---
+
 ## 2026-06-04 — Produktive Mandanten-Lizenzen angelegt (FidiBus + Berlin Shuttle)
 
 Erste echte Lizenzierung. Zwei **perpetual**-Lizenzen am Produkt `fahrdienst`, per
