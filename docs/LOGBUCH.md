@@ -17,6 +17,8 @@ Fahrdienst-Vertrag unberührt. +2 Integrationstests (`dashboard-seats.test.ts`: 
 account mit Live-Count + Domain-zuerst, stabile Reihenfolge bei account-zuerst-Policy).
 typecheck/lint/178 Unit + 57 Integration/Build grün. Audit: Agent rate-limited → Selbst-Review
 am Code (Zählung/Sortierung/API-Vertrag-unverändert/kein N+1/released-Edge/kein Leak) grün.
+**Deployt v1.7.1** (Commit `13ce743`): „No pending migrations", `healthy`, Endpoint-Smoke grün.
+FidiBus/Shuttle zeigen in der Aktiv-Lizenzen-Übersicht jetzt „Domain 1/1 · Nutzer N/∞".
 
 ---
 
