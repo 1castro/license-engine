@@ -4,6 +4,18 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-10-21 — Node-Sicherheitsfix: Basis-Image neu gebaut (22.22.3 → 22.23.4)
+
+- **Anlass:** Node.js-Sicherheits-Release vom 21.10. (Stufe HIGH), koordiniert vom Server-Chat docker-server-60, Plan `docker-server-60/docs/PLAN-SICHERHEIT-2026-10-21.md`. Go von Jan im License-Chat.
+- **Code unverändert (v1.7.1, HEAD `15d0668`).** Der Code auf dem Server ist per `rsync -nc` mit dem Repo verglichen und identisch. Es gab keinen rsync, keine Migration und kein `deploy.sh`.
+- **Audit:** Die drei Audits sind bewusst entfallen, weil sich am Code nichts geändert hat. Neu ist nur das gefixte Basis-Image `node:22-alpine`. Nachweis ist der Diff-Abgleich oben.
+- **Ablauf in `/opt/stacks/license-engine`:**
+  1. Rückweg-Tags `license-engine:pre-node-fix` (42a3ece5280b) und `license-engine-builder:pre-node-fix` (eaeb9065bf3d) gesetzt.
+  2. `docker compose --profile migrate build --pull --no-cache` neu gebaut. Der Builder ist dabei, weil der Cron um 03:30 ihn nutzt.
+  3. `docker compose up -d --no-deps license-engine` ausgeführt. Nur die App wurde neu erstellt, die DB blieb unberührt.
+- **Endprobe:** App und Builder laufen auf `node -v` = v22.23.4, Status healthy, neues Image sha256:8d429df09f1a. Health intern mit Token: 200 (DB, KEK und Signierung ok). Von außen: Startseite 200, `POST /api/v1/recheck` mit leerem Body 400 (Validierung greift).
+- **Offen:** Die `:pre-node-fix`-Tags werden entfernt, sobald ein Tag stabil gelaufen ist. Zurück geht es so: Tags auf `:latest` umhängen, dann `up -d --no-deps license-engine`.
+
 ## 2026-06-04 — Dashboard: unbegrenzte Seats sichtbar + stabile Reihenfolge (v1.7.1)
 
 Beobachtung von Jan: bei FidiBus/Shuttle (account unbegrenzt) zeigte die Aktiv-Lizenzen-
@@ -135,7 +147,7 @@ gleiches Muster wie `admin:bootstrap`/`phase3-bootstrap`). Alle Schritte mit Aud
 - **Test-Kunde** „Fahrdienst Tester" (`tester@fahrdienst.pro`, id `cmpy859jp…`, externalRef
   `fahrdienst-test`). Portal-Setup-Mail wurde versandt (für den API-Test irrelevant).
 - **Test-Lizenz** (id `cmpy859mw…`, externalRef `fahrdienst-test-tester`): licenseKey
-  `TR0P-26A1-0TXD-XMWB-FR8T`, status active, expiresAt 2027-06-03,
+  `«Test-Schlüssel, siehe Engine-Admin-UI»`, status active, expiresAt 2027-06-03,
   bindingPolicy `{ required:['domain'], maxPerType:{ domain:1, account:2 } }`.
 
 Idempotent (Dedup über externalRef → Re-Run liefert dieselbe Lizenz). **Rollback:** Lizenz +
@@ -516,7 +528,7 @@ DevOps-/Workflow-/Security-Audit der compose.yaml/Dockerfile/deploy.sh. Workflow
 - Rotate-Key-Flow per UI:
   - Dialog zeigt aktuelle kid + Confirm-Text mit Product-Name.
   - Nach Klick: Success-State mit neuer kid `cmpnzwpfo00028c3m94ryemet`.
-  - DB-Check: alter Key `isActive=false` + rotatedAt gesetzt, neuer Key `isActive=true`, `Product.activeSigningKeyId` zeigt auf neuen.
+  - DB-Check: alter Key `<redigiert → Bitwarden>` + rotatedAt gesetzt, neuer Key `<redigiert → Bitwarden>`, `<redigiert → Bitwarden>` zeigt auf neuen.
   - Audit-Events `signing_key.created` + `signing_key.rotated` (beide admin) in DB.
 - Enriched Health: alle 4 Checks `ok`, status `200`.
 
