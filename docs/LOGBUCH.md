@@ -4,6 +4,18 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-10-27 — Tägliche DB-Sicherung live + erster Restore-Test grün
+
+- **Lücke gefunden:** Die tägliche DB-Sicherung stand in BETRIEB.md nur als Beispiel und war nie eingerichtet.
+- **Lösung (Jans Entscheid):** Die License Engine läuft in der zentralen Sicherung von .60 mit, eingerichtet vom Server-Chat
+  docker-server-60. Täglich 02:20 kommt ein `pg_dump -Fc` nach `/opt/db-dumps` (8 Tage Vorhalt), dazu Kopia 03:00 auf die Storage Box.
+  Details in BETRIEB.md §2. Dump und `.env` (KEK) liegen vorerst im selben Kopia-Repo, getrennt wird später im Backup-Projekt.
+- **Restore-Test** mit dem Dump `license_engine_20261027_073901.dump` (46 KB): `pg_restore` ok. Die Zeilenzahlen sind identisch mit live
+  (Product 1, Customer 4, License 4, Activation 126, SigningKey 1, ApiKey 0). Die App lief gegen die wiederhergestellte DB
+  mit der Live-`.env`, Health ready = 200 mit `kek` ok und `signingKeys` ok (0 Produkte ohne aktiven Schlüssel).
+  Danach alles aufgeräumt, keine Reste. Nächster Test fällig spätestens 25.01.2027.
+- **Weitere Aufträge:** Fahrdienst-B11/B12 (Lizenz-Anbindung) an „fahrdienst #1“ beauftragt (Jans Anordnung), B13 ruht.
+
 ## 2026-10-21 — Node-Sicherheitsfix: Basis-Image neu gebaut (22.22.3 → 22.23.4)
 
 - **Anlass:** Node.js-Sicherheits-Release vom 21.10. (Stufe HIGH), koordiniert vom Server-Chat docker-server-60, Plan `docker-server-60/docs/PLAN-SICHERHEIT-2026-10-21.md`. Go von Jan im License-Chat.

@@ -45,33 +45,34 @@ verweigert der Start). Events, die in keiner Klasse stehen, werden nie gelöscht
 **Nicht** zu sichern: `node_modules`/`.next`/Build-Output (reproduzierbar), Source (in git),
 pino-Log-Files (operativ; das Audit-Log lebt in der DB).
 
-### Tägliches DB-Backup (Beispiel)
+### Tägliches DB-Backup (live seit 27.10.2026, betreut vom Server-Chat docker-server-60)
 
-```bash
-#!/usr/bin/env bash
-# /opt/license-engine/scripts/backup.sh — als cron alle 24h
-set -euo pipefail
-STAMP=$(date -u +%Y%m%dT%H%M%SZ)
-DEST=/var/backups/license-engine
-mkdir -p "$DEST"
-docker exec license-engine-db pg_dump \
-  --format=custom --no-owner --no-privileges \
-  -U license_engine -d license_engine \
-  | gzip > "$DEST/db-${STAMP}.dump.gz"
-find "$DEST" -name 'db-*.dump.gz' -mtime +30 -delete
-# Optional: Off-Site-Replikation (rsync/restic/B2) — mit dem Deploy-Setup entscheiden.
-```
+Die Sicherung gehört zur zentralen Sicherung von .60. Die License Engine baut **keine eigene**,
+damit nichts doppelt läuft. Plan: `docker-server-60/docs/PLAN-WARTUNG-UPDATES-BACKUP.md` §6b.
 
-```
-# Cron:
-0 3 * * *  /opt/license-engine/scripts/backup.sh >> /var/log/license-engine-backup.log 2>&1
-```
+| Was | Wo / Wann |
+|---|---|
+| DB-Dump | `/opt/db-dumps/license_engine_<UTC-Zeit>.dump` (`pg_dump -Fc`, Rechte 600) |
+| Zeitpunkt | täglich 02:20 lokal, root-Cron, Skript `/opt/stacks/sicherung/license-engine-dump.sh` |
+| Vorhalt | 8 Tage; das Skript prüft jeden Dump per `pg_restore -l` (Tabellendaten > 0) |
+| Log | `/opt/stacks/sicherung/license-engine-dump.log` |
+| Außer Haus | Kopia sichert `/opt` täglich 03:00 verschlüsselt auf die Hetzner Storage Box. Darin sind Dumps, `/opt/stacks/license-engine/.env` (KEK!), `compose.yaml` und `cron-maintenance.sh`. |
+
+**Offen:** Dump und `.env` (KEK) liegen heute im selben Kopia-Repo. Das widerspricht der Trennungs-Regel
+oben. Jan hat das bewusst so entschieden; die Trennung kommt mit dem Backup-Projekt.
+Der Wartungs-Cron 03:30 kollidiert nicht mit der Sicherung.
 
 ### Restore-Test (Pflicht alle 90 Tage)
 
-Frischen Postgres in separatem Volume starten, Dump per `pg_restore` einspielen, dann
-Server gegen die restorete DB starten und ein `POST /api/v1/recheck` mit einem alten Token
-feuern (mit dem KEK aus dem Backup-Zeitpunkt, nicht dem aktuellen). Geht das durch → Restore OK.
+Erprobter Ablauf (27.10.2026), komplett auf .60, ohne den Live-Stack anzufassen:
+1. Wegwerf-Netz + Wegwerf-Postgres (`postgres:16-alpine`) mit Zufallspasswort starten.
+2. Neuesten Dump per `docker cp` hinein, `pg_restore --no-owner --exit-on-error`.
+3. Zeilenzahlen (Product, Customer, License, Activation, SigningKey, ApiKey) gegen die Live-DB vergleichen.
+4. `license-engine:latest` mit `--env-file /opt/stacks/license-engine/.env` und `DATABASE_URL` auf die
+   Wegwerf-DB starten und `/api/health?level=ready` mit Health-Token abfragen. `kek` und `signingKeys`
+   müssen ok sein, denn das beweist, dass der KEK die gesicherten Signaturschlüssel entschlüsselt.
+5. Wegwerf-Container und -Netz entfernen.
+
 Jeder Restore-Test wird im LOGBUCH protokolliert (Datum, Dump-Stand, Ergebnis).
 
 ### KEK-Rotation (irregulär, bei Verdacht auf Kompromittierung)
