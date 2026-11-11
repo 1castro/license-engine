@@ -10,7 +10,7 @@
 # Build dev:          docker build --target dev -t license-engine:dev .
 
 # ------------------------------------------------------------ base
-FROM node:22-alpine AS base
+FROM node:22.23.5-alpine AS base
 # - openssl: Prisma braucht es zur Engine-Auswahl (sonst "failed to detect
 #   libssl version" -> Migration-Engine bricht auf alpine).
 # - corepack@latest: das im Image gebündelte corepack ist zu alt für pnpm 11.x.
@@ -59,7 +59,7 @@ RUN pnpm --filter @license-engine/server prisma:generate \
  && pnpm --filter @license-engine/server build
 
 # ------------------------------------------------------------ runtime
-FROM node:22-alpine AS runtime
+FROM node:22.23.5-alpine AS runtime
 ENV NODE_ENV=production
 # openssl: die Prisma-Query-Engine braucht libssl auch zur Laufzeit.
 RUN apk add --no-cache openssl \
