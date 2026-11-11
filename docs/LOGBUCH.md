@@ -4,6 +4,13 @@ Chronologisches Arbeitsprotokoll. Ein Eintrag pro Sitzung. Neueste Einträge obe
 
 ---
 
+## 2026-11-11 — Node-Sicherheitsrelease Nov. 2026 („Welle 3“): 22.23.4 → 22.23.5
+
+- **Anlass:** Node-Sicherheitsrelease 10./11.11. (16 CVEs). Koordiniert vom Server-Chat docker-server-60 und vom Security Advisor (`security-advisor/docs/vorfaelle/2026-11-11-node-security-release.md`). Jans Go kam im License-Chat.
+- **Änderung:** Das Dockerfile nutzt jetzt den festen Tag `node:22.23.5-alpine` (base + runtime) statt des gleitenden `node:22-alpine` (Commit `ffc791a`). Sonst ist der Code unverändert. Deshalb wurde kein Audit gemacht, die Begründung ist dieselbe wie am 21.10.
+- **Ablauf (Compose 5):** Rückweg-Tags `license-engine:vorher` (8d429df09f1a) und `license-engine-builder:vorher` (4497b066a32c). Dann `docker compose --profile migrate build --pull`. Der Dry-Run zeigte nur `license-engine` als Recreate. Danach `docker compose up -d --no-deps license-engine`. Die DB wurde nicht angefasst.
+- **Endprobe:** App und Builder auf v22.23.5. Container healthy. Health ready 200, alle Prüfungen ok (auch mail). Von außen: Startseite 200, `POST /api/v1/recheck` leer 400.
+
 ## 2026-10-27 — Tägliche DB-Sicherung live + erster Restore-Test grün
 
 - **Lücke gefunden:** Die tägliche DB-Sicherung stand in BETRIEB.md nur als Beispiel und war nie eingerichtet.
